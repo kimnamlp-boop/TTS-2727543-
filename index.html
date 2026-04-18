@@ -3,28 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Reader Library</title>
+    <title>Audio Reader Chapters</title>
     <style>
         :root { --primary: #007aff; --bg: #f2f2f7; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
         .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         
         #displayBox { 
-            width: 100%; height: 300px; overflow-y: auto; border: 1px solid #ddd; 
+            width: 100%; height: 350px; overflow-y: auto; border: 1px solid #ddd; 
             border-radius: 12px; padding: 15px; box-sizing: border-box; background: #fafafa;
-            line-height: 1.8; font-size: 19px; margin-bottom: 15px;
+            line-height: 1.8; font-size: 19px; margin-bottom: 10px;
         }
-        .sentence { cursor: pointer; border-radius: 4px; }
+        .sentence { cursor: pointer; border-radius: 4px; padding: 2px 0; }
         .highlight { background-color: #ffeb3b !important; font-weight: bold; }
         
-        .library-section { margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
-        .book-item { 
-            display: flex; justify-content: space-between; align-items: center;
-            background: #f9f9f9; padding: 12px; border-radius: 10px; margin-bottom: 8px;
-            font-size: 14px; border: 1px solid transparent;
-        }
-        .book-item.active { border-color: var(--primary); background: #eef6ff; }
-        .delete-btn { color: #ff3b30; font-weight: bold; padding: 5px 10px; }
+        /* Cấu trúc Menu Chương */
+        .chapter-nav { display: flex; gap: 10px; margin-bottom: 15px; }
+        #chapterSelect { flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; background: white; }
 
         .control-group { background: #f9f9f9; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
         .buttons { display: flex; gap: 10px; }
@@ -32,25 +27,32 @@
         .btn-play { background: var(--primary); color: white; }
         .btn-stop { background: #ff3b30; color: white; }
         select, input[type="range"] { width: 100%; margin: 10px 0; }
+        
+        .hint { font-size: 12px; color: #888; text-align: center; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2 style="text-align:center">Thư Viện Sách Nói</h2>
+    <h2 style="text-align:center">Đọc Truyện Phân Chương</h2>
     
-    <input type="file" id="fileInput" accept=".txt" style="margin-bottom: 15px; width: 100%;">
+    <input type="file" id="fileInput" accept=".txt" style="margin-bottom: 10px; width: 100%;">
     
-    <div id="displayBox">Chọn truyện từ thư viện hoặc tải file mới...</div>
+    <div class="chapter-nav">
+        <select id="chapterSelect"><option>Chọn chương...</option></select>
+    </div>
+
+    <div class="hint">Chạm vào câu để đọc từ đó. Chuyển chương bằng menu trên.</div>
+    <div id="displayBox">Tải file .txt để bắt đầu...</div>
 
     <div class="control-group">
         <label style="font-size:14px">Tốc độ: <span id="rateVal">1.0</span>x</label>
         <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
         <select id="timer">
-            <option value="0">Tắt hẹn giờ</option>
-            <option value="15">15 phút</option>
-            <option value="30">30 phút</option>
-            <option value="60">60 phút</option>
+            <option value="0">Hẹn giờ: Tắt</option>
+            <option value="15">Hẹn giờ: 15 phút</option>
+            <option value="30">Hẹn giờ: 30 phút</option>
+            <option value="60">Hẹn giờ: 60 phút</option>
         </select>
     </div>
 
@@ -58,109 +60,121 @@
         <button class="btn-play" id="playBtn">Nghe tiếp</button>
         <button class="btn-stop" id="stopBtn">Dừng</button>
     </div>
-
-    <div class="library-section">
-        <h3 style="font-size:16px">Truyện đã tải lên:</h3>
-        <div id="bookList"></div>
-    </div>
 </div>
 
 <script>
-    let db;
     let synth = window.speechSynthesis;
-    let sentences = [];
-    let currentIndex = 0;
+    let chapters = []; // Lưu nội dung thô từng chương
+    let currentSentences = []; // Lưu các câu của chương hiện tại
+    let currentChapterIndex = 0;
+    let currentSentenceIndex = 0;
     let isReading = false;
-    let currentBookName = "";
+    let currentFileName = "";
     let sleepTimer = null;
 
-    // 1. Khởi tạo Database (IndexedDB)
-    const request = indexedDB.open("StoryReaderDB", 1);
-    request.onupgradeneeded = e => {
-        db = e.target.result;
-        db.createObjectStore("books", { keyPath: "name" });
-    };
-    request.onsuccess = e => {
-        db = e.target.result;
-        refreshBookList();
-    };
+    const fileInput = document.getElementById('fileInput');
+    const displayBox = document.getElementById('displayBox');
+    const chapterSelect = document.getElementById('chapterSelect');
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const rateInput = document.getElementById('rate');
+    const rateVal = document.getElementById('rateVal');
 
-    // 2. Xử lý File và Lưu vào DB
-    document.getElementById('fileInput').onchange = e => {
+    rateInput.oninput = e => rateVal.innerText = e.target.value;
+
+    fileInput.onchange = e => {
         const file = e.target.files[0];
         if (!file) return;
+        currentFileName = file.name;
         const reader = new FileReader();
         reader.onload = event => {
-            const content = event.target.result;
-            const transaction = db.transaction(["books"], "readwrite");
-            transaction.objectStore("books").put({ name: file.name, data: content });
-            transaction.oncomplete = () => {
-                loadBook(file.name);
-                refreshBookList();
-            };
+            const text = event.target.result;
+            splitChapters(text); // 1. Chia chương
+            loadSavedPosition(); // 2. Lấy vị trí cũ
         };
         reader.readAsText(file);
     };
 
-    function refreshBookList() {
-        const listDiv = document.getElementById('bookList');
-        listDiv.innerHTML = "";
-        const transaction = db.transaction(["books"], "readonly");
-        transaction.objectStore("books").getAll().onsuccess = e => {
-            e.target.result.forEach(book => {
-                const item = document.createElement('div');
-                item.className = `book-item ${book.name === currentBookName ? 'active' : ''}`;
-                item.innerHTML = `
-                    <span onclick="loadBook('${book.name}')" style="flex:1; cursor:pointer">${book.name}</span>
-                    <span class="delete-btn" onclick="deleteBook('${book.name}')">Xóa</span>
-                `;
-                listDiv.appendChild(item);
-            });
-        };
-    }
+    // Hàm nhận diện và chia chương thông minh
+    function splitChapters(text) {
+        chapterSelect.innerHTML = "";
+        // Regex nhận diện "Chương X", "Quyển X", "Mục X", "Chương:", "1."...
+        const chapterRegex = /(^\s*(?:Chương|Quyển|Mục|Phần)\s*[\dIVX\-\.]+|^\s*\d+\.\s+.*)/gim;
+        
+        let match;
+        let lastIndex = 0;
+        chapters = [];
+        let chapterTitles = [];
 
-    function loadBook(name) {
-        currentBookName = name;
-        const transaction = db.transaction(["books"], "readonly");
-        transaction.objectStore("books").get(name).onsuccess = e => {
-            const text = e.target.result.data;
-            sentences = text.match(/[^.!?\n]+[.!?\n]?/g) || [text];
-            sentences = sentences.map(s => s.trim()).filter(s => s.length > 0);
-            currentIndex = parseInt(localStorage.getItem("pos_" + name)) || 0;
-            renderText();
-            refreshBookList();
-        };
-    }
-
-    function deleteBook(name) {
-        if(confirm("Xóa truyện này?")) {
-            db.transaction(["books"], "readwrite").objectStore("books").delete(name).onsuccess = () => {
-                if(currentBookName === name) {
-                    document.getElementById('displayBox').innerText = "Đã xóa truyện.";
-                    sentences = [];
-                }
-                refreshBookList();
-            };
+        // Tách các đoạn nội dung dựa trên tiêu đề chương
+        while ((match = chapterRegex.exec(text)) !== null) {
+            if (match.index > 0) {
+                chapters.push(text.substring(lastIndex, match.index)); // Nội dung chương trước
+            }
+            chapterTitles.push(match[0].trim()); // Tiêu đề chương này
+            lastIndex = match.index;
         }
+        chapters.push(text.substring(lastIndex)); // Chương cuối cùng
+
+        // Nếu không tìm thấy chương nào, coi cả file là 1 chương
+        if (chapters.length === 0) {
+            chapters = [text];
+            chapterTitles = ["Nội dung chính"];
+        }
+
+        // Cập nhật Menu Chương
+        chapterTitles.forEach((title, i) => {
+            const option = document.createElement('option');
+            option.value = i;
+            option.innerText = title.substring(0, 30) + (title.length > 30 ? "..." : ""); // Cắt ngắn tiêu đề quá dài
+            chapterSelect.appendChild(option);
+        });
+
+        chapterSelect.onchange = e => {
+            currentSentenceIndex = 0; // Đổi chương thì đọc từ đầu chương đó
+            loadChapter(parseInt(e.target.value));
+        };
     }
 
-    // 3. Các tính năng Đọc và Hiển thị
+    function loadSavedPosition() {
+        // Lưu vị trí dưới dạng: "indexChương_indexCâu"
+        const savedPos = localStorage.getItem("pos_" + currentFileName) || "0_0";
+        const parts = savedPos.split("_");
+        currentChapterIndex = parseInt(parts[0]) || 0;
+        currentSentenceIndex = parseInt(parts[1]) || 0;
+        
+        chapterSelect.value = currentChapterIndex;
+        loadChapter(currentChapterIndex, true); // true = load vị trí câu cũ
+    }
+
+    function loadChapter(chapterIndex, useSavedSentencePos = false) {
+        stopReading();
+        currentChapterIndex = chapterIndex;
+        if (!useSavedSentencePos) currentSentenceIndex = 0;
+
+        const chapterText = chapters[chapterIndex];
+        // Chia chương thành các câu để highlight
+        currentSentences = chapterText.match(/[^.!?\n]+[.!?\n]?/g) || [chapterText];
+        currentSentences = currentSentences.map(s => s.trim()).filter(s => s.length > 0);
+        
+        renderText();
+    }
+
     function renderText() {
-        const box = document.getElementById('displayBox');
-        box.innerHTML = '';
-        sentences.forEach((s, i) => {
+        displayBox.innerHTML = '';
+        currentSentences.forEach((s, i) => {
             const span = document.createElement('span');
             span.id = `s-${i}`;
-            span.className = 'sentence' + (i === currentIndex ? ' highlight' : '');
+            span.className = 'sentence' + (i === currentSentenceIndex ? ' highlight' : '');
             span.innerText = s + ' ';
-            span.onclick = () => jumpTo(i);
-            box.appendChild(span);
+            span.onclick = () => jumpTo(i); // Chạm để đọc
+            displayBox.appendChild(span);
         });
         scrollToActive();
     }
 
-    function jumpTo(index) {
-        currentIndex = index;
+    function jumpTo(sentenceIndex) {
+        currentSentenceIndex = sentenceIndex;
         stopReading();
         isReading = true;
         renderText();
@@ -168,33 +182,49 @@
     }
 
     function speak() {
-        if (currentIndex >= sentences.length || !isReading) return;
+        if (currentSentenceIndex >= currentSentences.length) {
+            // Đã đọc xong chương, tự động chuyển chương tiếp theo
+            if (currentChapterIndex < chapters.length - 1) {
+                currentChapterIndex++;
+                chapterSelect.value = currentChapterIndex;
+                loadChapter(currentChapterIndex);
+                isReading = true; // Tiếp tục trạng thái đang đọc
+                speak(); 
+            } else {
+                alert("Đã đọc hết truyện!");
+                stopReading();
+            }
+            return;
+        }
+
+        if (!isReading) return;
+
         synth.cancel();
-        let utter = new SpeechSynthesisUtterance(sentences[currentIndex]);
+        let utter = new SpeechSynthesisUtterance(currentSentences[currentSentenceIndex]);
         utter.lang = 'vi-VN';
-        utter.rate = parseFloat(document.getElementById('rate').value);
+        utter.rate = parseFloat(rateInput.value);
+
         utter.onstart = () => {
             document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
-            document.getElementById(`s-${currentIndex}`)?.classList.add('highlight');
+            document.getElementById(`s-${currentSentenceIndex}`)?.classList.add('highlight');
             scrollToActive();
-            localStorage.setItem("pos_" + currentBookName, currentIndex);
+            // Lưu vị trí: "indexChương_indexCâu"
+            localStorage.setItem("pos_" + currentFileName, `${currentChapterIndex}_${currentSentenceIndex}`);
         };
-        utter.onend = () => { if (isReading) { currentIndex++; speak(); } };
+
+        utter.onend = () => { if (isReading) { currentSentenceIndex++; speak(); } };
         synth.speak(utter);
     }
 
     function stopReading() { isReading = false; synth.cancel(); clearTimeout(sleepTimer); }
-    function scrollToActive() { document.getElementById(`s-${currentIndex}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    function scrollToActive() { document.getElementById(`s-${currentSentenceIndex}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
-    document.getElementById('playBtn').onclick = () => {
-        if (!currentBookName) return alert("Hãy chọn truyện!");
+    playBtn.onclick = () => {
+        if (chapters.length === 0) return alert("Vui lòng chọn file!");
         isReading = true;
-        const mins = parseInt(document.getElementById('timer').value);
-        if (mins > 0) sleepTimer = setTimeout(() => { stopReading(); alert("Hẹn giờ: Đã dừng."); }, mins * 60000);
         speak();
     };
-    document.getElementById('stopBtn').onclick = stopReading;
-    document.getElementById('rate').oninput = e => document.getElementById('rateVal').innerText = e.target.value;
+    stopBtn.onclick = stopReading;
 </script>
 </body>
 </html>
