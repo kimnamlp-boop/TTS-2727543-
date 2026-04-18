@@ -3,19 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Reader Pro</title>
+    <title>Audio Reader Pro Max</title>
     <style>
         :root { --primary: #007aff; --bg: #f2f2f7; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; -webkit-tap-highlight-color: transparent; }
         .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         h2 { text-align: center; font-size: 1.2rem; margin-bottom: 20px; }
         
         #displayBox { 
-            width: 100%; height: 250px; overflow-y: auto; border: 1px solid #ddd; 
+            width: 100%; height: 300px; overflow-y: auto; border: 1px solid #ddd; 
             border-radius: 12px; padding: 15px; box-sizing: border-box; background: #fafafa;
-            line-height: 1.6; font-size: 18px; margin-bottom: 15px;
+            line-height: 1.8; font-size: 19px; margin-bottom: 15px;
         }
-        .highlight { background-color: #ffeb3b; font-weight: bold; border-radius: 4px; padding: 0 2px; }
+        /* CSS cho từng câu văn */
+        .sentence { cursor: pointer; transition: background 0.2s; border-radius: 4px; padding: 2px 0; }
+        .sentence:active { background: #e0e0e0; }
+        .highlight { background-color: #ffeb3b !important; font-weight: bold; box-shadow: 0 0 5px #ffeb3b; }
         
         .control-group { background: #f9f9f9; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
         label { display: block; font-size: 14px; color: #666; margin-bottom: 8px; }
@@ -26,24 +29,26 @@
         .btn-stop { background: #ff3b30; color: white; }
         
         input[type="range"] { width: 100%; margin: 10px 0; }
-        select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
-        input[type="file"] { margin-bottom: 15px; font-size: 14px; }
+        select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; background: white; }
+        input[type="file"] { margin-bottom: 15px; width: 100%; }
+        .hint { font-size: 12px; color: #888; text-align: center; margin-bottom: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Trình Đọc Truyện Pro</h2>
+    <h2>Trình Đọc Truyện Pro Max</h2>
+    <div class="hint">Mẹo: Chạm trực tiếp vào câu bất kỳ để đọc từ đó</div>
     
     <input type="file" id="fileInput" accept=".txt">
     
-    <div id="displayBox">Chọn file để bắt đầu nội dung...</div>
+    <div id="displayBox">Vui lòng chọn file .txt...</div>
 
     <div class="control-group">
         <label>Tốc độ đọc: <span id="rateVal">1.0</span>x</label>
         <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
         
-        <label>Hẹn giờ tắt (phút):</label>
+        <label>Hẹn giờ tắt:</label>
         <select id="timer">
             <option value="0">Tắt hẹn giờ</option>
             <option value="15">15 phút</option>
@@ -53,7 +58,7 @@
     </div>
 
     <div class="buttons">
-        <button class="btn-play" id="playBtn">Đọc tiếp</button>
+        <button class="btn-play" id="playBtn">Tiếp tục</button>
         <button class="btn-stop" id="stopBtn">Dừng</button>
     </div>
     
@@ -85,11 +90,9 @@
         let reader = new FileReader();
         reader.onload = (e) => {
             let text = e.target.result;
-            // Chia câu theo dấu câu hoặc xuống dòng
-            sentences = text.split(/([.!?\n])/).reduce((acc, cur, i, arr) => {
-                if (i % 2 === 0) acc.push(cur + (arr[i+1] || ""));
-                return acc;
-            }, []).filter(s => s.trim().length > 0);
+            // Tách câu thông minh hơn (giữ lại dấu câu)
+            sentences = text.match(/[^.!?\n]+[.!?\n]?/g) || [text];
+            sentences = sentences.map(s => s.trim()).filter(s => s.length > 0);
             
             currentIndex = parseInt(localStorage.getItem(currentFileName)) || 0;
             renderText();
@@ -98,13 +101,37 @@
     };
 
     function renderText() {
-        displayBox.innerHTML = sentences.map((s, i) => 
-            `<span id="s-${i}" class="${i === currentIndex ? 'highlight' : ''}">${s}</span>`
-        ).join(' ');
+        displayBox.innerHTML = '';
+        sentences.forEach((s, i) => {
+            const span = document.createElement('span');
+            span.id = `s-${i}`;
+            span.className = 'sentence' + (i === currentIndex ? ' highlight' : '');
+            span.innerText = s + ' ';
+            
+            // TÍNH NĂNG MỚI: Click để nhảy đến câu đó
+            span.onclick = () => {
+                jumpToSentence(i);
+            };
+            
+            displayBox.appendChild(span);
+        });
         
-        // Tự động cuộn đến dòng đang đọc
+        scrollToActive();
+    }
+
+    function jumpToSentence(index) {
+        currentIndex = index;
+        stopReading(); // Dừng câu hiện tại
+        isReading = true;
+        renderText(); // Cập nhật highlight
+        speak(); // Bắt đầu đọc từ câu mới
+    }
+
+    function scrollToActive() {
         const activeSpan = document.getElementById(`s-${currentIndex}`);
-        if (activeSpan) activeSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (activeSpan) {
+            activeSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     }
 
     function speak() {
@@ -116,7 +143,11 @@
         utter.rate = parseFloat(rateInput.value);
 
         utter.onstart = () => {
-            renderText();
+            // Cập nhật highlight mà không cần render lại toàn bộ (tránh giật lag)
+            document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
+            const active = document.getElementById(`s-${currentIndex}`);
+            if (active) active.classList.add('highlight');
+            scrollToActive();
             localStorage.setItem(currentFileName, currentIndex);
         };
 
@@ -134,13 +165,13 @@
         if (sentences.length === 0) return alert("Vui lòng chọn file!");
         isReading = true;
         
-        // Xử lý hẹn giờ
+        // Hẹn giờ
         let minutes = parseInt(timerSelect.value);
         if (minutes > 0) {
             if (sleepTimer) clearTimeout(sleepTimer);
             sleepTimer = setTimeout(() => {
                 stopReading();
-                alert("Đã hết thời gian hẹn giờ!");
+                alert("Đã hết thời gian nghe truyện!");
             }, minutes * 60000);
         }
 
