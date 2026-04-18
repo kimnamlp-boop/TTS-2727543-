@@ -3,92 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web TTS Reader</title>
+    <title>Audio Reader Pro</title>
     <style>
-        body { font-family: -apple-system, sans-serif; padding: 20px; background: #f4f4f9; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #333; }
-        textarea { width: 100%; height: 200px; margin-top: 10px; border-radius: 10px; border: 1px solid #ddd; padding: 10px; box-sizing: border-box; }
-        .controls { display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }
-        button { flex: 1; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .btn-play { background: #007aff; color: white; }
+        :root { --primary: #007aff; --bg: #f2f2f7; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
+        .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        h2 { text-align: center; font-size: 1.2rem; margin-bottom: 20px; }
+        
+        #displayBox { 
+            width: 100%; height: 250px; overflow-y: auto; border: 1px solid #ddd; 
+            border-radius: 12px; padding: 15px; box-sizing: border-box; background: #fafafa;
+            line-height: 1.6; font-size: 18px; margin-bottom: 15px;
+        }
+        .highlight { background-color: #ffeb3b; font-weight: bold; border-radius: 4px; padding: 0 2px; }
+        
+        .control-group { background: #f9f9f9; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        label { display: block; font-size: 14px; color: #666; margin-bottom: 8px; }
+        
+        .buttons { display: flex; gap: 10px; }
+        button { flex: 1; padding: 15px; border: none; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        .btn-play { background: var(--primary); color: white; }
         .btn-stop { background: #ff3b30; color: white; }
-        .status { margin-top: 15px; font-size: 0.9em; color: #666; text-align: center; }
+        
+        input[type="range"] { width: 100%; margin: 10px 0; }
+        select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; }
+        input[type="file"] { margin-bottom: 15px; font-size: 14px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Trình Đọc Truyện Web</h2>
-    <input type="file" id="fileInput" accept=".txt">
-    <textarea id="textContent" placeholder="Nội dung sẽ hiển thị ở đây..."></textarea>
+    <h2>Trình Đọc Truyện Pro</h2>
     
-    <div class="controls">
-        <button class="btn-play" onclick="startReading()">Đọc Tiếp</button>
-        <button class="btn-stop" onclick="pauseReading()">Dừng</button>
+    <input type="file" id="fileInput" accept=".txt">
+    
+    <div id="displayBox">Chọn file để bắt đầu nội dung...</div>
+
+    <div class="control-group">
+        <label>Tốc độ đọc: <span id="rateVal">1.0</span>x</label>
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+        
+        <label>Hẹn giờ tắt (phút):</label>
+        <select id="timer">
+            <option value="0">Tắt hẹn giờ</option>
+            <option value="15">15 phút</option>
+            <option value="30">30 phút</option>
+            <option value="60">60 phút</option>
+        </select>
+    </div>
+
+    <div class="buttons">
+        <button class="btn-play" id="playBtn">Đọc tiếp</button>
+        <button class="btn-stop" id="stopBtn">Dừng</button>
     </div>
     
-    <div class="status" id="status">Sẵn sàng.</div>
+    <div id="status" style="text-align:center; margin-top:15px; font-size:12px; color:#999;"></div>
 </div>
 
 <script>
     let synth = window.speechSynthesis;
-    let utterance = new SpeechSynthesisUtterance();
     let sentences = [];
     let currentIndex = 0;
-    let isPaused = true;
+    let isReading = false;
     let currentFileName = "";
+    let sleepTimer = null;
 
-    // Đọc file từ thiết bị
-    document.getElementById('fileInput').addEventListener('change', function(e) {
+    const fileInput = document.getElementById('fileInput');
+    const displayBox = document.getElementById('displayBox');
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const rateInput = document.getElementById('rate');
+    const rateVal = document.getElementById('rateVal');
+    const timerSelect = document.getElementById('timer');
+
+    rateInput.oninput = () => rateVal.innerText = rateInput.value;
+
+    fileInput.onchange = (e) => {
         let file = e.target.files[0];
         if (!file) return;
         currentFileName = file.name;
         let reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = (e) => {
             let text = e.target.result;
-            document.getElementById('textContent').value = text;
-            sentences = text.split(/[.!?\n]/).filter(s => s.trim().length > 0);
+            // Chia câu theo dấu câu hoặc xuống dòng
+            sentences = text.split(/([.!?\n])/).reduce((acc, cur, i, arr) => {
+                if (i % 2 === 0) acc.push(cur + (arr[i+1] || ""));
+                return acc;
+            }, []).filter(s => s.trim().length > 0);
             
-            // Tải tiến trình cũ
             currentIndex = parseInt(localStorage.getItem(currentFileName)) || 0;
-            updateStatus();
+            renderText();
         };
         reader.readAsText(file);
-    });
+    };
 
-    function updateStatus() {
-        document.getElementById('status').innerText = `Đang ở câu: ${currentIndex} / ${sentences.length}`;
+    function renderText() {
+        displayBox.innerHTML = sentences.map((s, i) => 
+            `<span id="s-${i}" class="${i === currentIndex ? 'highlight' : ''}">${s}</span>`
+        ).join(' ');
+        
+        // Tự động cuộn đến dòng đang đọc
+        const activeSpan = document.getElementById(`s-${currentIndex}`);
+        if (activeSpan) activeSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    function startReading() {
-        if (sentences.length === 0) return;
-        isPaused = false;
-        speakNext();
-    }
+    function speak() {
+        if (currentIndex >= sentences.length || !isReading) return;
 
-    function speakNext() {
-        if (currentIndex < sentences.length && !isPaused) {
-            utterance = new SpeechSynthesisUtterance(sentences[currentIndex]);
-            utterance.lang = 'vi-VN';
-            utterance.rate = 1.0; // Tốc độ đọc
-
-            utterance.onend = function() {
-                currentIndex++;
-                localStorage.setItem(currentFileName, currentIndex); // Lưu tiến trình
-                updateStatus();
-                speakNext();
-            };
-
-            synth.speak(utterance);
-        }
-    }
-
-    function pauseReading() {
-        isPaused = true;
         synth.cancel();
-    }
-</script>
+        let utter = new SpeechSynthesisUtterance(sentences[currentIndex]);
+        utter.lang = 'vi-VN';
+        utter.rate = parseFloat(rateInput.value);
 
+        utter.onstart = () => {
+            renderText();
+            localStorage.setItem(currentFileName, currentIndex);
+        };
+
+        utter.onend = () => {
+            if (isReading) {
+                currentIndex++;
+                speak();
+            }
+        };
+
+        synth.speak(utter);
+    }
+
+    playBtn.onclick = () => {
+        if (sentences.length === 0) return alert("Vui lòng chọn file!");
+        isReading = true;
+        
+        // Xử lý hẹn giờ
+        let minutes = parseInt(timerSelect.value);
+        if (minutes > 0) {
+            if (sleepTimer) clearTimeout(sleepTimer);
+            sleepTimer = setTimeout(() => {
+                stopReading();
+                alert("Đã hết thời gian hẹn giờ!");
+            }, minutes * 60000);
+        }
+
+        speak();
+    };
+
+    function stopReading() {
+        isReading = false;
+        synth.cancel();
+        if (sleepTimer) clearTimeout(sleepTimer);
+    }
+
+    stopBtn.onclick = stopReading;
+</script>
 </body>
 </html>
