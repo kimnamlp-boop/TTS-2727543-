@@ -3,52 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Reader Pro Max</title>
+    <title>Audio Reader Library</title>
     <style>
         :root { --primary: #007aff; --bg: #f2f2f7; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
         .container { max-width: 500px; margin: auto; background: white; padding: 20px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-        h2 { text-align: center; font-size: 1.2rem; margin-bottom: 20px; }
         
         #displayBox { 
             width: 100%; height: 300px; overflow-y: auto; border: 1px solid #ddd; 
             border-radius: 12px; padding: 15px; box-sizing: border-box; background: #fafafa;
             line-height: 1.8; font-size: 19px; margin-bottom: 15px;
         }
-        /* CSS cho từng câu văn */
-        .sentence { cursor: pointer; transition: background 0.2s; border-radius: 4px; padding: 2px 0; }
-        .sentence:active { background: #e0e0e0; }
-        .highlight { background-color: #ffeb3b !important; font-weight: bold; box-shadow: 0 0 5px #ffeb3b; }
+        .sentence { cursor: pointer; border-radius: 4px; }
+        .highlight { background-color: #ffeb3b !important; font-weight: bold; }
         
+        .library-section { margin-top: 20px; border-top: 2px solid #eee; padding-top: 15px; }
+        .book-item { 
+            display: flex; justify-content: space-between; align-items: center;
+            background: #f9f9f9; padding: 12px; border-radius: 10px; margin-bottom: 8px;
+            font-size: 14px; border: 1px solid transparent;
+        }
+        .book-item.active { border-color: var(--primary); background: #eef6ff; }
+        .delete-btn { color: #ff3b30; font-weight: bold; padding: 5px 10px; }
+
         .control-group { background: #f9f9f9; padding: 15px; border-radius: 12px; margin-bottom: 15px; }
-        label { display: block; font-size: 14px; color: #666; margin-bottom: 8px; }
-        
         .buttons { display: flex; gap: 10px; }
-        button { flex: 1; padding: 15px; border: none; border-radius: 12px; font-weight: bold; font-size: 16px; cursor: pointer; }
+        button { flex: 1; padding: 15px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; }
         .btn-play { background: var(--primary); color: white; }
         .btn-stop { background: #ff3b30; color: white; }
-        
-        input[type="range"] { width: 100%; margin: 10px 0; }
-        select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 16px; background: white; }
-        input[type="file"] { margin-bottom: 15px; width: 100%; }
-        .hint { font-size: 12px; color: #888; text-align: center; margin-bottom: 10px; }
+        select, input[type="range"] { width: 100%; margin: 10px 0; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Trình Đọc Truyện Pro Max</h2>
-    <div class="hint">Mẹo: Chạm trực tiếp vào câu bất kỳ để đọc từ đó</div>
+    <h2 style="text-align:center">Thư Viện Sách Nói</h2>
     
-    <input type="file" id="fileInput" accept=".txt">
+    <input type="file" id="fileInput" accept=".txt" style="margin-bottom: 15px; width: 100%;">
     
-    <div id="displayBox">Vui lòng chọn file .txt...</div>
+    <div id="displayBox">Chọn truyện từ thư viện hoặc tải file mới...</div>
 
     <div class="control-group">
-        <label>Tốc độ đọc: <span id="rateVal">1.0</span>x</label>
+        <label style="font-size:14px">Tốc độ: <span id="rateVal">1.0</span>x</label>
         <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
-        
-        <label>Hẹn giờ tắt:</label>
         <select id="timer">
             <option value="0">Tắt hẹn giờ</option>
             <option value="15">15 phút</option>
@@ -58,133 +55,146 @@
     </div>
 
     <div class="buttons">
-        <button class="btn-play" id="playBtn">Tiếp tục</button>
+        <button class="btn-play" id="playBtn">Nghe tiếp</button>
         <button class="btn-stop" id="stopBtn">Dừng</button>
     </div>
-    
-    <div id="status" style="text-align:center; margin-top:15px; font-size:12px; color:#999;"></div>
+
+    <div class="library-section">
+        <h3 style="font-size:16px">Truyện đã tải lên:</h3>
+        <div id="bookList"></div>
+    </div>
 </div>
 
 <script>
+    let db;
     let synth = window.speechSynthesis;
     let sentences = [];
     let currentIndex = 0;
     let isReading = false;
-    let currentFileName = "";
+    let currentBookName = "";
     let sleepTimer = null;
 
-    const fileInput = document.getElementById('fileInput');
-    const displayBox = document.getElementById('displayBox');
-    const playBtn = document.getElementById('playBtn');
-    const stopBtn = document.getElementById('stopBtn');
-    const rateInput = document.getElementById('rate');
-    const rateVal = document.getElementById('rateVal');
-    const timerSelect = document.getElementById('timer');
+    // 1. Khởi tạo Database (IndexedDB)
+    const request = indexedDB.open("StoryReaderDB", 1);
+    request.onupgradeneeded = e => {
+        db = e.target.result;
+        db.createObjectStore("books", { keyPath: "name" });
+    };
+    request.onsuccess = e => {
+        db = e.target.result;
+        refreshBookList();
+    };
 
-    rateInput.oninput = () => rateVal.innerText = rateInput.value;
-
-    fileInput.onchange = (e) => {
-        let file = e.target.files[0];
+    // 2. Xử lý File và Lưu vào DB
+    document.getElementById('fileInput').onchange = e => {
+        const file = e.target.files[0];
         if (!file) return;
-        currentFileName = file.name;
-        let reader = new FileReader();
-        reader.onload = (e) => {
-            let text = e.target.result;
-            // Tách câu thông minh hơn (giữ lại dấu câu)
-            sentences = text.match(/[^.!?\n]+[.!?\n]?/g) || [text];
-            sentences = sentences.map(s => s.trim()).filter(s => s.length > 0);
-            
-            currentIndex = parseInt(localStorage.getItem(currentFileName)) || 0;
-            renderText();
+        const reader = new FileReader();
+        reader.onload = event => {
+            const content = event.target.result;
+            const transaction = db.transaction(["books"], "readwrite");
+            transaction.objectStore("books").put({ name: file.name, data: content });
+            transaction.oncomplete = () => {
+                loadBook(file.name);
+                refreshBookList();
+            };
         };
         reader.readAsText(file);
     };
 
+    function refreshBookList() {
+        const listDiv = document.getElementById('bookList');
+        listDiv.innerHTML = "";
+        const transaction = db.transaction(["books"], "readonly");
+        transaction.objectStore("books").getAll().onsuccess = e => {
+            e.target.result.forEach(book => {
+                const item = document.createElement('div');
+                item.className = `book-item ${book.name === currentBookName ? 'active' : ''}`;
+                item.innerHTML = `
+                    <span onclick="loadBook('${book.name}')" style="flex:1; cursor:pointer">${book.name}</span>
+                    <span class="delete-btn" onclick="deleteBook('${book.name}')">Xóa</span>
+                `;
+                listDiv.appendChild(item);
+            });
+        };
+    }
+
+    function loadBook(name) {
+        currentBookName = name;
+        const transaction = db.transaction(["books"], "readonly");
+        transaction.objectStore("books").get(name).onsuccess = e => {
+            const text = e.target.result.data;
+            sentences = text.match(/[^.!?\n]+[.!?\n]?/g) || [text];
+            sentences = sentences.map(s => s.trim()).filter(s => s.length > 0);
+            currentIndex = parseInt(localStorage.getItem("pos_" + name)) || 0;
+            renderText();
+            refreshBookList();
+        };
+    }
+
+    function deleteBook(name) {
+        if(confirm("Xóa truyện này?")) {
+            db.transaction(["books"], "readwrite").objectStore("books").delete(name).onsuccess = () => {
+                if(currentBookName === name) {
+                    document.getElementById('displayBox').innerText = "Đã xóa truyện.";
+                    sentences = [];
+                }
+                refreshBookList();
+            };
+        }
+    }
+
+    // 3. Các tính năng Đọc và Hiển thị
     function renderText() {
-        displayBox.innerHTML = '';
+        const box = document.getElementById('displayBox');
+        box.innerHTML = '';
         sentences.forEach((s, i) => {
             const span = document.createElement('span');
             span.id = `s-${i}`;
             span.className = 'sentence' + (i === currentIndex ? ' highlight' : '');
             span.innerText = s + ' ';
-            
-            // TÍNH NĂNG MỚI: Click để nhảy đến câu đó
-            span.onclick = () => {
-                jumpToSentence(i);
-            };
-            
-            displayBox.appendChild(span);
+            span.onclick = () => jumpTo(i);
+            box.appendChild(span);
         });
-        
         scrollToActive();
     }
 
-    function jumpToSentence(index) {
+    function jumpTo(index) {
         currentIndex = index;
-        stopReading(); // Dừng câu hiện tại
+        stopReading();
         isReading = true;
-        renderText(); // Cập nhật highlight
-        speak(); // Bắt đầu đọc từ câu mới
-    }
-
-    function scrollToActive() {
-        const activeSpan = document.getElementById(`s-${currentIndex}`);
-        if (activeSpan) {
-            activeSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        renderText();
+        speak();
     }
 
     function speak() {
         if (currentIndex >= sentences.length || !isReading) return;
-
         synth.cancel();
         let utter = new SpeechSynthesisUtterance(sentences[currentIndex]);
         utter.lang = 'vi-VN';
-        utter.rate = parseFloat(rateInput.value);
-
+        utter.rate = parseFloat(document.getElementById('rate').value);
         utter.onstart = () => {
-            // Cập nhật highlight mà không cần render lại toàn bộ (tránh giật lag)
             document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
-            const active = document.getElementById(`s-${currentIndex}`);
-            if (active) active.classList.add('highlight');
+            document.getElementById(`s-${currentIndex}`)?.classList.add('highlight');
             scrollToActive();
-            localStorage.setItem(currentFileName, currentIndex);
+            localStorage.setItem("pos_" + currentBookName, currentIndex);
         };
-
-        utter.onend = () => {
-            if (isReading) {
-                currentIndex++;
-                speak();
-            }
-        };
-
+        utter.onend = () => { if (isReading) { currentIndex++; speak(); } };
         synth.speak(utter);
     }
 
-    playBtn.onclick = () => {
-        if (sentences.length === 0) return alert("Vui lòng chọn file!");
-        isReading = true;
-        
-        // Hẹn giờ
-        let minutes = parseInt(timerSelect.value);
-        if (minutes > 0) {
-            if (sleepTimer) clearTimeout(sleepTimer);
-            sleepTimer = setTimeout(() => {
-                stopReading();
-                alert("Đã hết thời gian nghe truyện!");
-            }, minutes * 60000);
-        }
+    function stopReading() { isReading = false; synth.cancel(); clearTimeout(sleepTimer); }
+    function scrollToActive() { document.getElementById(`s-${currentIndex}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
+    document.getElementById('playBtn').onclick = () => {
+        if (!currentBookName) return alert("Hãy chọn truyện!");
+        isReading = true;
+        const mins = parseInt(document.getElementById('timer').value);
+        if (mins > 0) sleepTimer = setTimeout(() => { stopReading(); alert("Hẹn giờ: Đã dừng."); }, mins * 60000);
         speak();
     };
-
-    function stopReading() {
-        isReading = false;
-        synth.cancel();
-        if (sleepTimer) clearTimeout(sleepTimer);
-    }
-
-    stopBtn.onclick = stopReading;
+    document.getElementById('stopBtn').onclick = stopReading;
+    document.getElementById('rate').oninput = e => document.getElementById('rateVal').innerText = e.target.value;
 </script>
 </body>
 </html>
