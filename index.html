@@ -45,6 +45,9 @@
 
         input[type="range"] { width: 100%; height: 25px; margin: 10px 0; }
         select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #d1d1d6; margin-top: 5px; }
+
+        /* Notification style */
+        #notification { position: fixed; top: 20px; right: 20px; background: var(--primary); color: white; padding: 12px 20px; border-radius: 25px; font-weight: 600; z-index: 10000; display: none; }
     </style>
 </head>
 <body>
@@ -84,25 +87,93 @@
     </div>
 </div>
 
-<audio id="silentAudio" loop>
-    <source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3" type="audio/mp3">
-</audio>
+<!-- Notification cho background -->
+<div id="notification"></div>
 
 <script>
     let db, synth = window.speechSynthesis;
     let chapters = [], currentSentences = [];
     let curChapIdx = 0, curSentIdx = 0;
     let isReading = false, curBookName = "", sleepTimer = null;
-
-    const silentAudio = document.getElementById('silentAudio');
+    let currentUtterance = null;
     const displayBox = document.getElementById('displayBox');
     const chapterSelect = document.getElementById('chapterSelect');
     const rateInput = document.getElementById('rate');
 
+    // 🔥 PHẦN 4: CHẠY NỀN HOÀN CHỈNH - KHÔNG CẦN AUDIO FAKE
+    function initBackgroundMode() {
+        // 1. MediaSession - Hoạt động 100% khi khóa màn hình
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: 'Audio Reader Pro',
+                artist: 'Đang đọc...',
+                artwork: [{ src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }]
+            });
+
+            navigator.mediaSession.setActionHandler('play', () => {
+                showNotification('Tiếp tục nghe', '🎧 Đang phát');
+                isReading = true;
+                if (currentUtterance) speak();
+            });
+
+            navigator.mediaSession.setActionHandler('pause', () => {
+                showNotification('Tạm dừng', '⏸️ Đã dừng');
+                stopReading();
+            });
+
+            navigator.mediaSession.setActionHandler('stop', stopReading);
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                if (curSentIdx > 0) curSentIdx--;
+                speak();
+            });
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
+                curSentIdx++;
+                speak();
+            });
+        }
+
+        // 2. Visibility API - Tự động pause khi thoát app
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && isReading) {
+                showNotification('Ở nền', '📱 Vẫn đang nghe...', 3000);
+            }
+        });
+
+        // 3. Page Visibility cho mobile
+        window.addEventListener('blur', () => {
+            if (isReading) showNotification('Ở nền', '🎵 Tiếp tục nghe...', 2000);
+        });
+
+        // 4. Request notification permission
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+    }
+
+    function showNotification(title, body, duration = 4000) {
+        const noti = document.getElementById('notification');
+        noti.innerText = `${title}: ${body}`;
+        noti.style.display = 'block';
+        setTimeout(() => noti.style.display = 'none', duration);
+
+        // Native notification
+        if (Notification.permission === 'granted') {
+            new Notification(title, { 
+                body, 
+                icon: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png',
+                badge: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png'
+            });
+        }
+    }
+
     // 1. DATABASE & THƯ VIỆN
     const request = indexedDB.open("ProReaderDB", 2);
     request.onupgradeneeded = e => { e.target.result.createObjectStore("books", { keyPath: "name" }); };
-    request.onsuccess = e => { db = e.target.result; refreshLib(); };
+    request.onsuccess = e => { 
+        db = e.target.result; 
+        refreshLib(); 
+        initBackgroundMode(); // 🔥 Khởi tạo chạy nền ngay
+    };
 
     document.getElementById('fileInput').onchange = e => {
         const file = e.target.files[0];
@@ -165,6 +236,7 @@
             chapterSelect.value = curChapIdx;
             loadChapter(curChapIdx, true);
             refreshLib();
+            updateMediaSession();
         };
     }
 
@@ -190,20 +262,26 @@
         scroll();
     }
 
-    // 3. ĐIỀU KHIỂN ÂM THANH & CHẠY NỀN
+    // 3. ĐIỀU KHIỂN ÂM THANH - CẢI TIẾN
     function speak() {
         if (curSentIdx >= currentSentences.length) {
-            if (curChapIdx < chapters.length - 1) { curChapIdx++; chapterSelect.value = curChapIdx; loadChapter(curChapIdx); isReading = true; speak(); }
+            if (curChapIdx < chapters.length - 1) { 
+                curChapIdx++; 
+                chapterSelect.value = curChapIdx; 
+                loadChapter(curChapIdx); 
+                isReading = true; 
+                speak(); 
+            }
             return;
         }
         if (!isReading) return;
 
         synth.cancel();
-        let utter = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
-        utter.lang = 'vi-VN';
-        utter.rate = parseFloat(rateInput.value);
+        currentUtterance = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
+        currentUtterance.lang = 'vi-VN';
+        currentUtterance.rate = parseFloat(rateInput.value);
 
-        utter.onstart = () => {
+        currentUtterance.onstart = () => {
             document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
             document.getElementById(`s-${curSentIdx}`)?.classList.add('highlight');
             scroll();
@@ -211,34 +289,59 @@
             updateMediaSession();
         };
 
-        utter.onend = () => { if (isReading) { curSentIdx++; speak(); } };
-        synth.speak(utter);
+        currentUtterance.onend = () => { 
+            if (isReading) { 
+                curSentIdx++; 
+                speak(); 
+            } 
+        };
+
+        synth.speak(currentUtterance);
     }
 
     function updateMediaSession() {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
-                title: curBookName,
+                title: curBookName || 'Audio Reader Pro',
                 artist: `Chương ${curChapIdx + 1}`,
                 artwork: [{ src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }]
             });
-            navigator.mediaSession.setActionHandler('play', () => { isReading = true; speak(); });
-            navigator.mediaSession.setActionHandler('pause', stopReading);
         }
     }
 
-    function stopReading() { isReading = false; synth.cancel(); silentAudio.pause(); clearTimeout(sleepTimer); }
-    function scroll() { document.getElementById(`s-${curSentIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    function stopReading() { 
+        isReading = false; 
+        synth.cancel(); 
+        currentUtterance = null;
+        clearTimeout(sleepTimer); 
+        updateMediaSession();
+    }
 
+    function scroll() { 
+        document.getElementById(`s-${curSentIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+    }
+
+    // Event listeners
     document.getElementById('playBtn').onclick = () => {
         if (!curBookName) return alert("Chọn truyện!");
         isReading = true;
-        silentAudio.play();
+        showNotification('Bắt đầu nghe', `📖 ${curBookName}`);
+        
         const mins = parseInt(document.getElementById('timer').value);
-        if (mins > 0) sleepTimer = setTimeout(() => { stopReading(); alert("Hết giờ!"); }, mins * 60000);
+        if (mins > 0) {
+            sleepTimer = setTimeout(() => { 
+                stopReading(); 
+                showNotification('Hết giờ', '⏰ Đã dừng tự động');
+            }, mins * 60000);
+        }
         speak();
     };
-    document.getElementById('stopBtn').onclick = stopReading;
+
+    document.getElementById('stopBtn').onclick = () => {
+        stopReading();
+        showNotification('Đã dừng', '⏹️');
+    };
+
     chapterSelect.onchange = e => loadChapter(parseInt(e.target.value));
     rateInput.oninput = e => document.getElementById('rateVal').innerText = e.target.value;
 </script>
