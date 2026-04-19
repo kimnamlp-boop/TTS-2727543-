@@ -61,6 +61,56 @@
         <button class="btn-stop" id="stopBtn">Dừng</button>
     </div>
 </div>
+<audio id="silentAudio" loop>
+    <source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3" type="audio/mp3">
+</audio>
+
+<script>
+    // --- BỔ SUNG VÀO PHẦN ĐẦU SCRIPT ---
+    const silentAudio = document.getElementById('silentAudio');
+
+    function setupMediaSession() {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: currentBookName || 'Đang đọc truyện',
+                artist: 'Trình đọc Pro Max',
+                album: 'Audiobook',
+                artwork: [
+                    { src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }
+                ]
+            });
+
+            // Cấu hình các nút điều khiển trên màn hình khóa
+            navigator.mediaSession.setActionHandler('play', () => { playBtn.click(); });
+            navigator.mediaSession.setActionHandler('pause', () => { stopBtn.click(); });
+            navigator.mediaSession.setActionHandler('nexttrack', () => { 
+                currentIndex++; 
+                renderText();
+                speak(); 
+            });
+        }
+    }
+
+    // --- CẬP NHẬT HÀM PLAY ---
+    playBtn.onclick = () => {
+        if (sentences.length === 0) return alert("Vui lòng chọn file!");
+        isReading = true;
+        
+        // Kích hoạt âm thanh im lặng để "chiếm quyền" chạy nền
+        silentAudio.play();
+        setupMediaSession();
+        
+        speak();
+    };
+
+    // --- CẬP NHẬT HÀM STOP ---
+    function stopReading() {
+        isReading = false;
+        synth.cancel();
+        silentAudio.pause(); // Dừng âm thanh im lặng
+        if (sleepTimer) clearTimeout(sleepTimer);
+    }
+</script>
 
 <script>
     let synth = window.speechSynthesis;
