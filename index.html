@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Audio Reader Pro - Timer Fix</title>
+    <title>Audio Reader Pro Max - Voice Select</title>
     <style>
         :root { --primary: #007aff; --bg: #f2f2f7; --card: #ffffff; }
         body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
@@ -20,11 +20,6 @@
         .control-group { background: #f2f2f7; padding: 15px; border-radius: 15px; margin-bottom: 15px; }
         label { font-size: 13px; color: #8e8e93; text-transform: uppercase; display: block; margin-bottom: 5px; }
         
-        .timer-display { 
-            font-weight: bold; color: #ff3b30; text-align: center; 
-            font-size: 14px; margin-top: 5px; min-height: 20px;
-        }
-
         .buttons { display: flex; gap: 12px; margin-bottom: 15px; }
         button { flex: 1; padding: 16px; border: none; border-radius: 14px; font-weight: 600; font-size: 16px; cursor: pointer; }
         .btn-play { background: var(--primary); color: white; }
@@ -38,14 +33,16 @@
 <body>
 
 <div class="container">
-    <h2 style="text-align:center">Trình Đọc Hẹn Giờ</h2>
+    <h2 style="text-align:center">Trình Đọc Đa Giọng Nói</h2>
     
     <input type="file" id="fileInput" accept=".txt" style="margin-bottom: 15px; width: 100%;">
+    
     <select id="chapterSelect"><option>Chọn chương...</option></select>
-    <div id="displayBox">Sẵn sàng...</div>
+
+    <div id="displayBox">Chọn file để bắt đầu...</div>
 
     <div class="control-group">
-        <label>Chọn giọng đọc:</label>
+        <label>Chọn giọng đọc (Siri, Linh...):</label>
         <select id="voiceSelect"><option>Đang tải danh sách giọng...</option></select>
 
         <label>Tốc độ: <span id="rateVal">1.0</span>x</label>
@@ -53,12 +50,10 @@
         
         <label>Hẹn giờ tắt:</label>
         <select id="timer">
-            <option value="0">Tắt hẹn giờ</option>
+            <option value="0">Không hẹn giờ</option>
             <option value="15">15 phút</option>
             <option value="30">30 phút</option>
-            <option value="60">60 phút</option>
         </select>
-        <div id="countdown" class="timer-display"></div>
     </div>
 
     <div class="buttons">
@@ -75,28 +70,35 @@
     let db, synth = window.speechSynthesis;
     let chapters = [], currentSentences = [], voices = [];
     let curChapIdx = 0, curSentIdx = 0;
-    let isReading = false, curBookName = "";
-    
-    // Biến cho hẹn giờ
-    let timeLeft = 0; 
-    let timerInterval = null;
+    let isReading = false, curBookName = "", sleepTimer = null;
 
     const voiceSelect = document.getElementById('voiceSelect');
     const silentAudio = document.getElementById('silentAudio');
-    const countdownDisplay = document.getElementById('countdown');
 
+    // TỰ ĐỘNG CẬP NHẬT DANH SÁCH GIỌNG ĐỌC
     function loadVoices() {
         voices = synth.getVoices();
+        // Lọc ra các giọng Tiếng Việt
         let viVoices = voices.filter(v => v.lang.includes('vi'));
-        if (viVoices.length > 0) {
-            voiceSelect.innerHTML = viVoices.map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+        
+        if (viVoices.length === 0) {
+            voiceSelect.innerHTML = "<option>Không tìm thấy giọng Tiếng Việt</option>";
+            return;
         }
+
+        voiceSelect.innerHTML = viVoices.map(v => 
+            `<option value="${v.name}">${v.name} ${v.default ? '(Mặc định)' : ''}</option>`
+        ).join('');
     }
-    if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
+
+    // iOS cần sự kiện này để load danh sách giọng
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+        speechSynthesis.onvoiceschanged = loadVoices;
+    }
     loadVoices();
 
     // DATABASE & THƯ VIỆN
-    const request = indexedDB.open("ProTimerDB", 1);
+    const request = indexedDB.open("VoiceReaderDB", 1);
     request.onupgradeneeded = e => { e.target.result.createObjectStore("books", { keyPath: "name" }); };
     request.onsuccess = e => { db = e.target.result; refreshLib(); };
 
@@ -133,6 +135,7 @@
             let match, lastIdx = 0;
             chapters = []; 
             document.getElementById('chapterSelect').innerHTML = "";
+
             while ((match = chapterRegex.exec(text)) !== null) {
                 if (match.index > 0) chapters.push(text.substring(lastIdx, match.index));
                 const opt = document.createElement('option');
@@ -143,6 +146,7 @@
             }
             chapters.push(text.substring(lastIdx));
             if (chapters.length === 1) document.getElementById('chapterSelect').innerHTML = "<option value='0'>Nội dung</option>";
+
             const saved = localStorage.getItem("pos_" + name) || "0_0";
             curChapIdx = parseInt(saved.split("_")[0]);
             curSentIdx = parseInt(saved.split("_")[1]);
@@ -177,13 +181,17 @@
     function speak() {
         if (curSentIdx >= currentSentences.length) {
             if (curChapIdx < chapters.length - 1) { curChapIdx++; loadChapter(curChapIdx); isReading = true; speak(); }
-            else { stopReading(); }
             return;
         }
         if (!isReading) return;
+
         synth.cancel();
         let utter = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
-        utter.voice = voices.find(v => v.name === voiceSelect.value);
+        
+        // GÁN GIỌNG ĐỌC ĐÃ CHỌN
+        const selectedVoiceName = voiceSelect.value;
+        utter.voice = voices.find(v => v.name === selectedVoiceName);
+        
         utter.rate = parseFloat(document.getElementById('rate').value);
         utter.onstart = () => {
             document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
@@ -195,51 +203,10 @@
         synth.speak(utter);
     }
 
-    // XỬ LÝ HẸN GIỜ CẢI TIẾN
-    function startTimer() {
-        clearInterval(timerInterval);
-        const minutes = parseInt(document.getElementById('timer').value);
-        if (minutes === 0) {
-            countdownDisplay.innerText = "";
-            return;
-        }
+    function stopReading() { isReading = false; synth.cancel(); silentAudio.pause(); }
+    function scroll() { document.getElementById(`s-${curSentIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
-        timeLeft = minutes * 60;
-        updateTimerUI();
-
-        timerInterval = setInterval(() => {
-            timeLeft--;
-            updateTimerUI();
-            if (timeLeft <= 0) {
-                stopReading();
-                clearInterval(timerInterval);
-                countdownDisplay.innerText = "Đã hết thời gian!";
-            }
-        }, 1000);
-    }
-
-    function updateTimerUI() {
-        const m = Math.floor(timeLeft / 60);
-        const s = timeLeft % 60;
-        countdownDisplay.innerText = `Sẽ tắt sau: ${m}ph ${s.toString().padStart(2, '0')}s`;
-    }
-
-    function stopReading() {
-        isReading = false;
-        synth.cancel();
-        silentAudio.pause();
-        clearInterval(timerInterval);
-        countdownDisplay.innerText = "";
-    }
-
-    document.getElementById('playBtn').onclick = () => {
-        if (!curBookName) return alert("Chọn truyện!");
-        isReading = true;
-        silentAudio.play();
-        startTimer(); // Bắt đầu hẹn giờ khi nhấn phát
-        speak();
-    };
-
+    document.getElementById('playBtn').onclick = () => { isReading = true; silentAudio.play(); speak(); };
     document.getElementById('stopBtn').onclick = stopReading;
     document.getElementById('chapterSelect').onchange = e => loadChapter(parseInt(e.target.value));
     document.getElementById('rate').oninput = e => document.getElementById('rateVal').innerText = e.target.value;
