@@ -264,40 +264,47 @@
 
     // 3. ĐIỀU KHIỂN ÂM THANH - CẢI TIẾN
     function speak() {
-        if (curSentIdx >= currentSentences.length) {
-            if (curChapIdx < chapters.length - 1) { 
-                curChapIdx++; 
-                chapterSelect.value = curChapIdx; 
-                loadChapter(curChapIdx); 
-                isReading = true; 
-                speak(); 
-            }
-            return;
+    if (curSentIdx >= currentSentences.length) {
+        if (curChapIdx < chapters.length - 1) { 
+            curChapIdx++; 
+            chapterSelect.value = curChapIdx; 
+            loadChapter(curChapIdx); 
+            isReading = true; 
+            speak(); 
         }
-        if (!isReading) return;
-
-        synth.cancel();
-        currentUtterance = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
-        currentUtterance.lang = 'vi-VN';
-        currentUtterance.rate = parseFloat(rateInput.value);
-
-        currentUtterance.onstart = () => {
-            document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
-            document.getElementById(`s-${curSentIdx}`)?.classList.add('highlight');
-            scroll();
-            localStorage.setItem("pos_" + curBookName, `${curChapIdx}_${curSentIdx}`);
-            updateMediaSession();
-        };
-
-        currentUtterance.onend = () => { 
-            if (isReading) { 
-                curSentIdx++; 
-                speak(); 
-            } 
-        };
-
-        synth.speak(currentUtterance);
+        return;
     }
+    if (!isReading) return;
+
+    synth.cancel();
+    let utter = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
+    
+    // --- ĐOẠN CODE ÉP CHỌN GIỌNG SIRI ---
+    let allVoices = synth.getVoices();
+    // Tìm giọng có tên là 'Siri' và ngôn ngữ là 'vi-VN'
+    let siriVoice = allVoices.find(v => v.name.includes('Siri') && v.lang.includes('vi'));
+    
+    if (siriVoice) {
+        utter.voice = siriVoice;
+    } else {
+        utter.lang = 'vi-VN'; // Nếu không tìm thấy Siri thì dùng mặc định tiếng Việt
+    }
+    // ------------------------------------
+
+    utter.rate = parseFloat(rateInput.value);
+
+    utter.onstart = () => {
+        document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
+        document.getElementById(`s-${curSentIdx}`)?.classList.add('highlight');
+        scroll();
+        localStorage.setItem("pos_" + curBookName, `${curChapIdx}_${curSentIdx}`);
+        updateMediaSession();
+    };
+
+    utter.onend = () => { if (isReading) { curSentIdx++; speak(); } };
+    synth.speak(utter);
+}
+
 
     function updateMediaSession() {
         if ('mediaSession' in navigator) {
