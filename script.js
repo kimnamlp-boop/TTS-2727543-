@@ -7,14 +7,48 @@ const voiceSelect = document.getElementById('voiceSelect');
 const silentAudio = document.getElementById('silentAudio');
 const countdownDisplay = document.getElementById('countdown');
 
-// Load Voices
+// Thay thế đoạn loadVoices cũ bằng đoạn này
 function loadVoices() {
+    // Lấy tất cả giọng nói có sẵn trên hệ thống
     voices = synth.getVoices();
-    let viVoices = voices.filter(v => v.lang.includes('vi'));
-    if (viVoices.length > 0) voiceSelect.innerHTML = viVoices.map(v => `<option value="${v.name}">${v.name}</option>`).join('');
+    
+    // Lọc ra các giọng Tiếng Việt (vi-VN)
+    // Chúng ta dùng filter thông minh để bắt được cả Siri và Linh
+    let viVoices = voices.filter(v => 
+        v.lang.toLowerCase().includes('vi') || 
+        v.lang.toLowerCase().includes('viet')
+    );
+
+    if (viVoices.length > 0) {
+        // Sắp xếp để Siri hiện lên đầu cho dễ chọn
+        viVoices.sort((a, b) => b.name.includes('Siri') - a.name.includes('Siri'));
+
+        voiceSelect.innerHTML = viVoices.map(v => 
+            `<option value="${v.name}">${v.name.replace('Microsoft', '').replace('Apple', '')}</option>`
+        ).join('');
+        
+        console.log("Đã tìm thấy " + viVoices.length + " giọng Tiếng Việt.");
+    } else {
+        voiceSelect.innerHTML = "<option>Đang quét giọng đọc...</option>";
+    }
 }
-if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
-loadVoices();
+
+// KHẮC PHỤC LỖI TRÌNH DUYỆT CHƯA KỊP LOAD
+// Cứ mỗi 1 giây quét lại 1 lần (tổng cộng 5 lần) để ép iPhone nhả giọng Siri ra
+let scanCount = 0;
+let voiceScanner = setInterval(() => {
+    loadVoices();
+    scanCount++;
+    if (scanCount > 5 || (voices.filter(v => v.lang.includes('vi')).length > 1)) {
+        clearInterval(voiceScanner);
+    }
+}, 1000);
+
+// Sự kiện tiêu chuẩn khi danh sách giọng thay đổi
+if (speechSynthesis.onvoiceschanged !== undefined) {
+    speechSynthesis.onvoiceschanged = loadVoices;
+}
+
 
 // Database
 const request = indexedDB.open("ProTimerDB", 1);
