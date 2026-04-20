@@ -1,179 +1,71 @@
-:root {
-    --primary: #007aff;
-    --bg: #f2f2f7;
-    --card: #ffffff;
-}
-
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    padding: 15px;
-    margin: 0;
-    color: #1c1c1e;
+    font-family: -apple-system;
+    background: #f2f2f7;
+    padding: 10px;
 }
 
 .container {
-    max-width: 550px;
+    max-width: 520px;
     margin: auto;
-    background: var(--card);
-    padding: 20px;
-    border-radius: 25px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+    background: #fff;
+    padding: 15px;
+    border-radius: 20px;
 }
 
-/* Màn hình hiển thị văn bản */
+h2 {
+    text-align: center;
+}
+
 #displayBox {
-    width: 100%;
-    height: 320px;
-    overflow-y: auto;
-    border: 1px solid #e5e5ea;
-    border-radius: 15px;
-    padding: 18px;
-    box-sizing: border-box;
-    background: #fafafa;
-    line-height: 1.8;
-    font-size: 19px;
-    margin-bottom: 12px;
-    -webkit-overflow-scrolling: touch;
-}
-
-.sentence {
-    cursor: pointer;
-    border-radius: 4px;
-    padding: 2px 0;
-    transition: background 0.2s;
+    height: 260px;
+    overflow: auto;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 10px;
+    font-size: 17px;
+    line-height: 1.7;
+    margin: 10px 0;
 }
 
 .highlight {
-    background-color: #ffeb3b !important;
+    background: yellow;
     font-weight: bold;
-    box-shadow: 0 0 8px #ffeb3b;
 }
 
-/* Điều khiển chương */
-.chapter-nav {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 15px;
-}
-
-#chapterSelect {
-    flex: 1;
-    padding: 12px;
-    border-radius: 10px;
-    border: 1px solid #d1d1d6;
-    font-size: 16px;
-    background: white;
-    appearance: none;
-}
-
-/* Nhóm điều khiển âm thanh */
-.control-group {
-    background: #f2f2f7;
-    padding: 15px;
-    border-radius: 15px;
-    margin-bottom: 15px;
-}
-
-label {
-    font-size: 13px;
-    color: #8e8e93;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+select, input[type=range] {
+    width: 100%;
+    margin: 8px 0;
+    padding: 10px;
 }
 
 .buttons {
     display: flex;
-    gap: 12px;
+    gap: 10px;
 }
 
 button {
     flex: 1;
-    padding: 16px;
+    padding: 14px;
     border: none;
-    border-radius: 14px;
-    font-weight: 600;
-    font-size: 16px;
-    cursor: pointer;
-    transition: opacity 0.2s;
+    border-radius: 12px;
+    font-weight: bold;
 }
 
-button:active {
-    opacity: 0.7;
-}
-
-.btn-play {
-    background: var(--primary);
+.play {
+    background: #007aff;
     color: white;
 }
 
-.btn-stop {
+.stop {
     background: #ff3b30;
     color: white;
 }
 
-/* Thư viện truyện */
-.library-section {
-    margin-top: 25px;
-    border-top: 1px solid #e5e5ea;
-    padding-top: 20px;
-}
-
-.book-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #fff;
-    padding: 14px;
-    border-radius: 12px;
-    margin-bottom: 10px;
-    font-size: 15px;
-    border: 1px solid #e5e5ea;
-}
-
-.book-item.active {
-    border-color: var(--primary);
-    background: #f0f7ff;
-}
-
-.delete-btn {
+#countdown {
     color: #ff3b30;
-    font-size: 13px;
-    padding: 5px;
-    cursor: pointer;
-}
-
-.delete-btn:hover {
-    text-decoration: underline;
-}
-
-input[type="range"] {
-    width: 100%;
-    height: 25px;
-    margin: 10px 0;
-}
-
-select {
-    width: 100%;
-    padding: 10px;
-    border-radius: 8px;
-    border: 1px solid #d1d1d6;
+    text-align: center;
+    font-weight: 600;
+    font-size: 14px;
     margin-top: 5px;
-}
-
-/* Responsive */
-@media (max-width: 480px) {
-    .container {
-        padding: 15px;
-    }
-    
-    #displayBox {
-        height: 280px;
-        font-size: 17px;
-    }
-    
-    button {
-        padding: 14px;
-        font-size: 14px;
-    }
+    min-height: 18px;
 }
