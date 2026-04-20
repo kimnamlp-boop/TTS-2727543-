@@ -1,273 +1,246 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Audio Reader Ultimate - Timer Fix</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Audio Reader Ultimate</title>
+    <style>
+        :root { --primary: #007aff; --bg: #f2f2f7; --card: #ffffff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); padding: 15px; margin: 0; color: #1c1c1e; }
+        .container { max-width: 550px; margin: auto; background: var(--card); padding: 20px; border-radius: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
+        
+        /* Màn hình hiển thị văn bản */
+        #displayBox { 
+            width: 100%; height: 320px; overflow-y: auto; border: 1px solid #e5e5ea; 
+            border-radius: 15px; padding: 18px; box-sizing: border-box; background: #fafafa;
+            line-height: 1.8; font-size: 19px; margin-bottom: 12px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .sentence { cursor: pointer; border-radius: 4px; padding: 2px 0; transition: background 0.2s; }
+        .highlight { background-color: #ffeb3b !important; font-weight: bold; box-shadow: 0 0 8px #ffeb3b; }
+        
+        /* Điều khiển chương */
+        .chapter-nav { display: flex; gap: 8px; margin-bottom: 15px; }
+        #chapterSelect { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #d1d1d6; font-size: 16px; background: white; appearance: none; }
 
-<style>
-:root { --primary:#007aff; --bg:#f2f2f7; --card:#fff; }
+        /* Nhóm điều khiển âm thanh */
+        .control-group { background: #f2f2f7; padding: 15px; border-radius: 15px; margin-bottom: 15px; }
+        label { font-size: 13px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .buttons { display: flex; gap: 12px; }
+        button { flex: 1; padding: 16px; border: none; border-radius: 14px; font-weight: 600; font-size: 16px; cursor: pointer; transition: opacity 0.2s; }
+        button:active { opacity: 0.7; }
+        .btn-play { background: var(--primary); color: white; }
+        .btn-stop { background: #ff3b30; color: white; }
 
-body {
-    font-family:-apple-system;
-    background:var(--bg);
-    padding:15px;
-}
+        /* Thư viện truyện */
+        .library-section { margin-top: 25px; border-top: 1px solid #e5e5ea; padding-top: 20px; }
+        .book-item { 
+            display: flex; justify-content: space-between; align-items: center;
+            background: #fff; padding: 14px; border-radius: 12px; margin-bottom: 10px;
+            font-size: 15px; border: 1px solid #e5e5ea;
+        }
+        .book-item.active { border-color: var(--primary); background: #f0f7ff; }
+        .delete-btn { color: #ff3b30; font-size: 13px; padding: 5px; }
 
-.container {
-    max-width:550px;
-    margin:auto;
-    background:#fff;
-    padding:20px;
-    border-radius:20px;
-}
-
-#displayBox {
-    height:300px;
-    overflow:auto;
-    border:1px solid #ddd;
-    border-radius:12px;
-    padding:12px;
-    font-size:18px;
-    line-height:1.7;
-}
-
-.highlight { background:yellow; }
-
-select,input[type=range]{
-    width:100%;
-    padding:10px;
-    margin:10px 0;
-}
-
-button{
-    width:100%;
-    padding:14px;
-    margin-top:5px;
-    border:none;
-    border-radius:12px;
-    font-weight:bold;
-}
-
-.play{background:#007aff;color:#fff;}
-.stop{background:#ff3b30;color:#fff;}
-
-.timer{
-    text-align:center;
-    color:#ff3b30;
-    font-weight:600;
-    min-height:18px;
-}
-</style>
+        input[type="range"] { width: 100%; height: 25px; margin: 10px 0; }
+        select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #d1d1d6; margin-top: 5px; }
+    </style>
 </head>
-
 <body>
 
 <div class="container">
+    <h2 style="text-align:center; margin-top:0;">Web Audiobook Pro</h2>
+    
+    <input type="file" id="fileInput" accept=".txt" style="margin-bottom: 15px; width: 100%;">
+    
+    <div class="chapter-nav">
+        <select id="chapterSelect"><option>Chọn chương...</option></select>
+    </div>
 
-<input type="file" id="fileInput" accept=".txt">
+    <div id="displayBox">Đang chờ tải file...</div>
 
-<select id="chapterSelect"></select>
+    <div class="control-group">
+        <label>Tốc độ đọc: <span id="rateVal">1.0</span>x</label>
+        <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+        
+        <label>Hẹn giờ tắt:</label>
+        <select id="timer">
+            <option value="0">Không hẹn giờ</option>
+            <option value="15">15 phút</option>
+            <option value="30">30 phút</option>
+            <option value="60">60 phút</option>
+        </select>
+    </div>
 
-<div id="displayBox">Sẵn sàng...</div>
+    <div class="buttons">
+        <button class="btn-play" id="playBtn">PHÁT</button>
+        <button class="btn-stop" id="stopBtn">DỪNG</button>
+    </div>
 
-<label>Tốc độ: <span id="rateVal">1</span></label>
-<input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
-
-<label>Hẹn giờ:</label>
-<select id="timer">
-<option value="0">Không hẹn giờ</option>
-<option value="15">15 phút</option>
-<option value="30">30 phút</option>
-<option value="60">60 phút</option>
-</select>
-
-<div id="countdown" class="timer"></div>
-
-<button class="play" id="playBtn">PHÁT</button>
-<button class="stop" id="stopBtn">DỪNG</button>
-
+    <div class="library-section">
+        <h3 style="font-size:16px; margin-bottom:15px;">Thư viện của bạn</h3>
+        <div id="bookList"></div>
+    </div>
 </div>
 
 <audio id="silentAudio" loop>
-<source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3">
+    <source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3" type="audio/mp3">
 </audio>
 
 <script>
+    let db, synth = window.speechSynthesis;
+    let chapters = [], currentSentences = [];
+    let curChapIdx = 0, curSentIdx = 0;
+    let isReading = false, curBookName = "", sleepTimer = null;
 
-let synth = speechSynthesis;
-let chapters = [], sentences = [];
-let chapIdx = 0, sentIdx = 0;
-let reading = false;
+    const silentAudio = document.getElementById('silentAudio');
+    const displayBox = document.getElementById('displayBox');
+    const chapterSelect = document.getElementById('chapterSelect');
+    const rateInput = document.getElementById('rate');
 
-let timerInterval = null;
-let timeLeft = 0;
+    // 1. DATABASE & THƯ VIỆN
+    const request = indexedDB.open("ProReaderDB", 2);
+    request.onupgradeneeded = e => { e.target.result.createObjectStore("books", { keyPath: "name" }); };
+    request.onsuccess = e => { db = e.target.result; refreshLib(); };
 
-const countdown = document.getElementById("countdown");
-const silentAudio = document.getElementById("silentAudio");
-
-// ===== LOAD FILE =====
-fileInput.onchange = e=>{
-    let file = e.target.files[0];
-    let reader = new FileReader();
-
-    reader.onload = ev=>{
-        let text = ev.target.result;
-
-        chapters = text.split(/Chương\s+\d+/);
-        if(chapters.length<=1) chapters=[text];
-
-        chapterSelect.innerHTML = chapters.map((_,i)=>
-            `<option value="${i}">Chương ${i+1}</option>`
-        ).join("");
-
-        loadChapter(0);
+    document.getElementById('fileInput').onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+            const transaction = db.transaction(["books"], "readwrite");
+            transaction.objectStore("books").put({ name: file.name, data: ev.target.result });
+            transaction.oncomplete = () => { loadBook(file.name); refreshLib(); };
+        };
+        reader.readAsText(file);
     };
 
-    reader.readAsText(file);
-};
+    function refreshLib() {
+        const list = document.getElementById('bookList');
+        list.innerHTML = "";
+        db.transaction(["books"], "readonly").objectStore("books").getAll().onsuccess = e => {
+            e.target.result.forEach(book => {
+                const item = document.createElement('div');
+                item.className = `book-item ${book.name === curBookName ? 'active' : ''}`;
+                item.innerHTML = `<span onclick="loadBook('${book.name}')" style="flex:1;">${book.name}</span>
+                                  <span class="delete-btn" onclick="deleteBook('${book.name}')">Xóa</span>`;
+                list.appendChild(item);
+            });
+        };
+    }
 
-function loadChapter(i){
-    stopReading();
-    chapIdx=i;
-    sentIdx=0;
+    function deleteBook(name) {
+        if(confirm("Xóa truyện này khỏi thư viện?")) {
+            db.transaction(["books"], "readwrite").objectStore("books").delete(name).onsuccess = () => {
+                if(curBookName === name) { curBookName = ""; displayBox.innerText = "Đã xóa."; }
+                refreshLib();
+            };
+        }
+    }
 
-    sentences = chapters[i]
-        .match(/[^.!?]+[.!?]?/g)
-        .map(s=>s.trim());
+    // 2. XỬ LÝ NỘI DUNG & CHƯƠNG
+    function loadBook(name) {
+        curBookName = name;
+        db.transaction(["books"], "readonly").objectStore("books").get(name).onsuccess = e => {
+            const text = e.target.result.data;
+            const chapterRegex = /(^\s*(?:Chương|Quyển|Mục|Phần)\s*[\dIVX\-\.]+|^\s*\d+\.\s+.*)/gim;
+            let match, lastIdx = 0;
+            chapters = []; chapterSelect.innerHTML = "";
 
-    render();
-}
+            while ((match = chapterRegex.exec(text)) !== null) {
+                if (match.index > 0) chapters.push(text.substring(lastIdx, match.index));
+                const opt = document.createElement('option');
+                opt.value = chapters.length;
+                opt.innerText = match[0].trim().substring(0, 35);
+                chapterSelect.appendChild(opt);
+                lastIdx = match.index;
+            }
+            chapters.push(text.substring(lastIdx));
+            if (chapters.length === 1) { chapterSelect.innerHTML = "<option value='0'>Nội dung chính</option>"; }
 
-chapterSelect.onchange=e=>{
-    loadChapter(parseInt(e.target.value));
-};
+            const saved = localStorage.getItem("pos_" + name) || "0_0";
+            curChapIdx = parseInt(saved.split("_")[0]);
+            curSentIdx = parseInt(saved.split("_")[1]);
+            chapterSelect.value = curChapIdx;
+            loadChapter(curChapIdx, true);
+            refreshLib();
+        };
+    }
 
-// ===== RENDER =====
-function render(){
-    let box=document.getElementById("displayBox");
-    box.innerHTML="";
+    function loadChapter(idx, useSavedSent = false) {
+        stopReading();
+        curChapIdx = idx;
+        if (!useSavedSent) curSentIdx = 0;
+        const text = chapters[idx];
+        currentSentences = text.match(/[^.!?\n]+[.!?\n]?/g) || [text];
+        currentSentences = currentSentences.map(s => s.trim()).filter(s => s.length > 0);
+        renderText();
+    }
 
-    sentences.forEach((s,i)=>{
-        let span=document.createElement("span");
-        span.innerText=s+" ";
+    function renderText() {
+        displayBox.innerHTML = '';
+        currentSentences.forEach((s, i) => {
+            const span = document.createElement('span');
+            span.id = `s-${i}`; span.className = 'sentence' + (i === curSentIdx ? ' highlight' : '');
+            span.innerText = s + ' ';
+            span.onclick = () => { curSentIdx = i; isReading = true; speak(); };
+            displayBox.appendChild(span);
+        });
+        scroll();
+    }
 
-        if(i===sentIdx) span.classList.add("highlight");
+    // 3. ĐIỀU KHIỂN ÂM THANH & CHẠY NỀN
+    function speak() {
+        if (curSentIdx >= currentSentences.length) {
+            if (curChapIdx < chapters.length - 1) { curChapIdx++; chapterSelect.value = curChapIdx; loadChapter(curChapIdx); isReading = true; speak(); }
+            return;
+        }
+        if (!isReading) return;
 
-        span.onclick=()=>{
-            sentIdx=i;
-            speak();
+        synth.cancel();
+        let utter = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
+        utter.lang = 'vi-VN';
+        utter.rate = parseFloat(rateInput.value);
+
+        utter.onstart = () => {
+            document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
+            document.getElementById(`s-${curSentIdx}`)?.classList.add('highlight');
+            scroll();
+            localStorage.setItem("pos_" + curBookName, `${curChapIdx}_${curSentIdx}`);
+            updateMediaSession();
         };
 
-        box.appendChild(span);
-    });
-}
-
-// ===== SPEAK =====
-function speak(){
-
-    if(!reading) return;
-
-    if(sentIdx>=sentences.length){
-        stopReading();
-        return;
+        utter.onend = () => { if (isReading) { curSentIdx++; speak(); } };
+        synth.speak(utter);
     }
 
-    synth.cancel();
+    function updateMediaSession() {
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: curBookName,
+                artist: `Chương ${curChapIdx + 1}`,
+                artwork: [{ src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }]
+            });
+            navigator.mediaSession.setActionHandler('play', () => { isReading = true; speak(); });
+            navigator.mediaSession.setActionHandler('pause', stopReading);
+        }
+    }
 
-    let u=new SpeechSynthesisUtterance(sentences[sentIdx]);
+    function stopReading() { isReading = false; synth.cancel(); silentAudio.pause(); clearTimeout(sleepTimer); }
+    function scroll() { document.getElementById(`s-${curSentIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
-    u.lang = "vi-VN";
-    u.rate = parseFloat(rate.value);
-
-    u.onstart=()=> render();
-
-    u.onend=()=>{
-        sentIdx++;
+    document.getElementById('playBtn').onclick = () => {
+        if (!curBookName) return alert("Chọn truyện!");
+        isReading = true;
+        silentAudio.play();
+        const mins = parseInt(document.getElementById('timer').value);
+        if (mins > 0) sleepTimer = setTimeout(() => { stopReading(); alert("Hết giờ!"); }, mins * 60000);
         speak();
     };
-
-    synth.speak(u);
-}
-
-// ===== TIMER =====
-function startTimer(){
-    clearInterval(timerInterval);
-
-    let mins = parseInt(timer.value);
-
-    if(mins === 0){
-        countdown.innerText="";
-        return;
-    }
-
-    timeLeft = mins * 60;
-
-    updateCountdown();
-
-    timerInterval = setInterval(()=>{
-        timeLeft--;
-
-        updateCountdown();
-
-        if(timeLeft <= 0){
-            clearInterval(timerInterval);
-            stopReading();
-            countdown.innerText = "Đã hết thời gian!";
-        }
-
-    },1000);
-}
-
-function updateCountdown(){
-    let m = Math.floor(timeLeft / 60);
-    let s = timeLeft % 60;
-
-    countdown.innerText = `Sẽ tắt sau: ${m}ph ${s.toString().padStart(2,'0')}s`;
-}
-
-// ===== CONTROL =====
-playBtn.onclick = ()=>{
-    if(!sentences.length) return alert("Chọn file!");
-
-    reading = true;
-
-    silentAudio.play().catch(()=>{});
-
-    startTimer(); // reset timer mỗi lần play
-
-    speak();
-};
-
-function stopReading(){
-    reading = false;
-    synth.cancel();
-    silentAudio.pause();
-
-    clearInterval(timerInterval);
-    countdown.innerText="";
-}
-
-stopBtn.onclick = stopReading;
-
-// đổi thời gian khi đang chạy
-timer.onchange = ()=>{
-    if(reading){
-        startTimer();
-    }
-};
-
-// UI
-rate.oninput=e=>rateVal.innerText=e.target.value;
-
-// fix chạy nền iOS
-document.addEventListener("visibilitychange",()=>{
-    if(document.hidden && reading){
-        silentAudio.play().catch(()=>{});
-    }
-});
-
+    document.getElementById('stopBtn').onclick = stopReading;
+    chapterSelect.onchange = e => loadChapter(parseInt(e.target.value));
+    rateInput.oninput = e => document.getElementById('rateVal').innerText = e.target.value;
 </script>
-
 </body>
 </html>
