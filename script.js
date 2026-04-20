@@ -1,166 +1,413 @@
 let db, synth = window.speechSynthesis;
-let chapters = [], currentSentences = [], voices = [];
+let chapters = [], currentSentences = [];
 let curChapIdx = 0, curSentIdx = 0;
-let isReading = false, curBookName = "", timeLeft = 0, timerInterval = null;
+let isReading = false, curBookName = "", sleepTimer = null;
+let countdownInterval = null; // Biến riêng cho bộ đếm lùi
+let remainingSeconds = 0; // Thời gian còn lại (giây)
 
-const voiceSelect = document.getElementById('voiceSelect');
 const silentAudio = document.getElementById('silentAudio');
-const countdownDisplay = document.getElementById('countdown');
+const displayBox = document.getElementById('displayBox');
+const chapterSelect = document.getElementById('chapterSelect');
+const rateInput = document.getElementById('rate');
+const rateVal = document.getElementById('rateVal');
+const timerSelect = document.getElementById('timer');
+const timerDisplay = document.createElement('div'); // Tạo hiển thị timer
 
-// --- QUẢN LÝ GIỌNG ĐỌC (ƯU TIÊN SIRI) ---
-function loadVoices() {
-    const allVoices = synth.getVoices();
-    if (allVoices.length === 0) return;
+// Tạo phần tử hiển thị timer đỏ
+timerDisplay.id = 'timerDisplay';
+timerDisplay.style.cssText = `
+    color: #ff3b30;
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 8px;
+    text-align: center;
+    padding: 8px;
+    background: #fff5f5;
+    border-radius: 8px;
+    display: none;
+`;
+document.querySelector('.control-group').appendChild(timerDisplay);
 
-    let viVoices = allVoices.filter(v => v.lang.toLowerCase().includes('vi'));
-    let fallbackVoices = allVoices.filter(v => v.lang.includes('en') && (v.name.toLowerCase().includes('siri') || v.name.toLowerCase().includes('enhanced')));
-    let finalVoices = viVoices.length > 0 ? viVoices : fallbackVoices;
+// 1. DATABASE & THƯ VIỆN
+const request = indexedDB.open("ProReaderDB", 2);
 
-    finalVoices.sort((a, b) => {
-        const score = v => (v.name.toLowerCase().includes('siri') ? 10 : 0) + (v.name.toLowerCase().includes('enhanced') ? 5 : 0);
-        return score(b) - score(a);
-    });
+request.onupgradeneeded = function(e) {
+    const db = e.target.result;
+    if (!db.objectStoreNames.contains("books")) {
+        db.createObjectStore("books", { keyPath: "name" });
+    }
+};
 
-    voices = allVoices;
-    voiceSelect.innerHTML = finalVoices.map(v => `<option value="${v.name}">${v.name.replace(/Apple|Microsoft|Google/gi, '').trim()} (${v.lang})</option>`).join('');
-    autoSelectBestVoice();
-}
+request.onsuccess = function(e) {
+    db = e.target.result;
+    refreshLib();
+};
 
-function autoSelectBestVoice() {
-    const best = voices.find(v => v.name.toLowerCase().includes('siri') && v.lang.includes('vi')) || voices.find(v => v.lang.includes('vi'));
-    if (best) voiceSelect.value = best.name;
-}
+request.onerror = function(e) {
+    console.error("Database error:", e.target.error);
+};
 
-// Quét giọng liên tục trong 10 giây (Fix lỗi iOS Safari load chậm)
-let voiceScan = setInterval(() => {
-    loadVoices();
-    if (voices.some(v => v.name.toLowerCase().includes('siri')) || voiceScan > 10) clearInterval(voiceScan);
-}, 1000);
-if (speechSynthesis.onvoiceschanged !== undefined) speechSynthesis.onvoiceschanged = loadVoices;
-
-// --- DATABASE & FILE ---
-const request = indexedDB.open("StoryProDB", 1);
-request.onupgradeneeded = e => e.target.result.createObjectStore("books", { keyPath: "name" });
-request.onsuccess = e => { db = e.target.result; refreshLib(); };
+// Xử lý upload file
+document.getElementById('fileInput').onchange = function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        const transaction = db.transaction(["books"], "readwrite");
+        transaction.objectStore("books").put({ name: file.name, data: ev.target.result });
+        transaction.oncomplete = function() {
+            loadBook(file.name);
+            refreshLib();
+        };
+    };
+    reader.readAsText(file);
+};
 
 function refreshLib() {
     const list = document.getElementById('bookList');
-    list.innerHTML = "<h3>Thư viện:</h3>";
-    db.transaction(["books"], "readonly").objectStore("books").getAll().onsuccess = e => {
+    list.innerHTML = "";
+    const transaction = db.transaction(["books"], "readonly");
+    const store = transaction.objectStore("books");
+    const request = store.getAll();
+    
+    request.onsuccess = function(e) {
         e.target.result.forEach(book => {
             const item = document.createElement('div');
-            item.className = `book-item`;
-            item.innerHTML = `<span onclick="loadBook('${book.name}')" style="flex:1; cursor:pointer;">📖 ${book.name}</span>`;
+            item.className = `book-item ${book.name === curBookName ? 'active' : ''}`;
+            item.innerHTML = `<span onclick="loadBook('${book.name.replace(/'/g, "\\'")}')" style="flex:1;">${escapeHtml(book.name)}</span>
+                              <span class="delete-btn" onclick="deleteBook('${book.name.replace(/'/g, "\\'")}')">Xóa</span>`;
             list.appendChild(item);
         });
     };
 }
 
-document.getElementById('fileInput').onchange = e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-        db.transaction(["books"], "readwrite").objectStore("books").put({ name: file.name, data: ev.target.result });
-        loadBook(file.name);
-        refreshLib();
-    };
-    reader.readAsText(file);
-};
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
 
-function loadBook(name) {
+function deleteBook(name) {
+    if(confirm("Xóa truyện này khỏi thư viện?")) {
+        const transaction = db.transaction(["books"], "readwrite");
+        transaction.objectStore("books").delete(name);
+        transaction.oncomplete = function() {
+            if(curBookName === name) {
+                curBookName = "";
+                displayBox.innerText = "Đã xóa.";
+            }
+            refreshLib();
+        };
+    }
+}
+
+// 2. XỬ LÝ NỘI DUNG & CHƯƠNG
+window.loadBook = function(name) {
     curBookName = name;
-    db.transaction(["books"], "readonly").objectStore("books").get(name).onsuccess = e => {
+    const transaction = db.transaction(["books"], "readonly");
+    const store = transaction.objectStore("books");
+    const request = store.get(name);
+    
+    request.onsuccess = function(e) {
         const text = e.target.result.data;
         const chapterRegex = /(^\s*(?:Chương|Quyển|Mục|Phần)\s*[\dIVX\-\.]+|^\s*\d+\.\s+.*)/gim;
-        let match, lastIdx = 0; chapters = []; 
-        document.getElementById('chapterSelect').innerHTML = "";
+        let match, lastIdx = 0;
+        chapters = [];
+        chapterSelect.innerHTML = "";
+        
+        // Thêm option mặc định
+        const defaultOpt = document.createElement('option');
+        defaultOpt.value = "0";
+        defaultOpt.innerText = "Đang xử lý...";
+        chapterSelect.appendChild(defaultOpt);
+        
         while ((match = chapterRegex.exec(text)) !== null) {
-            if (match.index > 0) chapters.push(text.substring(lastIdx, match.index));
+            if (match.index > lastIdx) {
+                chapters.push(text.substring(lastIdx, match.index));
+            }
             const opt = document.createElement('option');
             opt.value = chapters.length;
-            opt.innerText = match[0].trim().substring(0, 30);
-            document.getElementById('chapterSelect').appendChild(opt);
+            let chapterTitle = match[0].trim().substring(0, 35);
+            opt.innerText = chapterTitle;
+            chapterSelect.appendChild(opt);
             lastIdx = match.index;
         }
-        chapters.push(text.substring(lastIdx));
+        
+        // Thêm phần còn lại
+        if (lastIdx < text.length) {
+            chapters.push(text.substring(lastIdx));
+        }
+        
+        // Nếu không tìm thấy chương nào
+        if (chapters.length === 0) {
+            chapters = [text];
+            chapterSelect.innerHTML = "<option value='0'>Nội dung chính</option>";
+        } else {
+            // Xóa option mặc định
+            if (chapterSelect.options[0] && chapterSelect.options[0].value === "0") {
+                chapterSelect.remove(0);
+            }
+        }
+        
         const saved = localStorage.getItem("pos_" + name) || "0_0";
         curChapIdx = parseInt(saved.split("_")[0]);
         curSentIdx = parseInt(saved.split("_")[1]);
-        document.getElementById('chapterSelect').value = curChapIdx;
+        
+        if (chapterSelect.options[curChapIdx]) {
+            chapterSelect.value = curChapIdx;
+        } else {
+            curChapIdx = 0;
+            chapterSelect.value = 0;
+        }
+        
         loadChapter(curChapIdx, true);
+        refreshLib();
     };
-}
+};
 
-function loadChapter(idx, useSaved = false) {
-    stopReading(); curChapIdx = idx;
-    if (!useSaved) curSentIdx = 0;
+function loadChapter(idx, useSavedSent = false) {
+    stopReading();
+    curChapIdx = idx;
+    if (!useSavedSent) curSentIdx = 0;
     const text = chapters[idx];
+    if (!text) return;
+    
+    // Tách câu
     currentSentences = text.match(/[^.!?\n]+[.!?\n]?/g) || [text];
     currentSentences = currentSentences.map(s => s.trim()).filter(s => s.length > 0);
     renderText();
 }
 
 function renderText() {
-    const box = document.getElementById('displayBox'); box.innerHTML = '';
+    displayBox.innerHTML = '';
     currentSentences.forEach((s, i) => {
         const span = document.createElement('span');
-        span.id = `s-${i}`; span.className = 'sentence' + (i === curSentIdx ? ' highlight' : '');
+        span.id = `s-${i}`;
+        span.className = 'sentence' + (i === curSentIdx ? ' highlight' : '');
         span.innerText = s + ' ';
-        span.onclick = () => { curSentIdx = i; isReading = true; speak(); };
-        box.appendChild(span);
+        span.onclick = (function(idx) {
+            return function() {
+                curSentIdx = idx;
+                isReading = true;
+                speak();
+            };
+        })(i);
+        displayBox.appendChild(span);
     });
-    scroll();
+    scrollToSentence();
 }
 
-// --- ĐIỀU KHIỂN ĐỌC ---
-function speak() {
-    if (curSentIdx >= currentSentences.length) {
-        if (curChapIdx < chapters.length - 1) { curChapIdx++; loadChapter(curChapIdx); isReading = true; speak(); }
-        else stopReading();
-        return;
-    }
-    if (!isReading) return;
-    synth.cancel();
-    let utter = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
-    utter.voice = voices.find(v => v.name === voiceSelect.value);
-    utter.rate = parseFloat(document.getElementById('rate').value);
-    utter.onstart = () => {
-        document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
-        document.getElementById(`s-${curSentIdx}`)?.classList.add('highlight');
-        scroll();
-        localStorage.setItem("pos_" + curBookName, `${curChapIdx}_${curSentIdx}`);
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({ title: curBookName, artist: `Chương ${curChapIdx + 1}` });
+// 3. HỆ THỐNG TIMER CHÍNH XÁC
+function startTimer(minutes) {
+    // Dừng timer cũ nếu có
+    stopTimer();
+    
+    if (minutes <= 0) return;
+    
+    // Khởi tạo thời gian còn lại
+    remainingSeconds = minutes * 60;
+    
+    // Cập nhật hiển thị ngay lập tức
+    updateTimerDisplay();
+    timerDisplay.style.display = 'block';
+    
+    // Bắt đầu đếm lùi bằng setInterval riêng biệt
+    countdownInterval = setInterval(function() {
+        if (remainingSeconds > 0) {
+            remainingSeconds--;
+            updateTimerDisplay();
+            
+            // Hết giờ
+            if (remainingSeconds === 0) {
+                stopTimer();
+                stopReading();
+                timerDisplay.style.display = 'none';
+                alert("⏰ Hết giờ! Audiobook đã dừng lại.");
+            }
+        } else {
+            // Dừng timer nếu đã về 0
+            stopTimer();
+            timerDisplay.style.display = 'none';
         }
-    };
-    utter.onend = () => { if (isReading) { curSentIdx++; speak(); } };
-    synth.speak(utter);
-}
-
-// --- HẸN GIỜ ĐẾM NGƯỢC ---
-function startTimer() {
-    clearInterval(timerInterval);
-    const mins = parseInt(document.getElementById('timer').value);
-    if (mins === 0) { countdownDisplay.innerText = ""; return; }
-    timeLeft = mins * 60;
-    updateTimerUI();
-    timerInterval = setInterval(() => {
-        timeLeft--; updateTimerUI();
-        if (timeLeft <= 0) { stopReading(); clearInterval(timerInterval); countdownDisplay.innerText = "Đã hết giờ!"; }
     }, 1000);
 }
 
-function updateTimerUI() {
-    const m = Math.floor(timeLeft / 60), s = timeLeft % 60;
-    countdownDisplay.innerText = `⏱ Tự tắt sau: ${m}ph ${s.toString().padStart(2, '0')}s`;
+function stopTimer() {
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    if (sleepTimer) {
+        clearTimeout(sleepTimer);
+        sleepTimer = null;
+    }
+    remainingSeconds = 0;
+    timerDisplay.style.display = 'none';
 }
 
-function stopReading() { isReading = false; synth.cancel(); silentAudio.pause(); clearInterval(timerInterval); countdownDisplay.innerText = ""; }
+function updateTimerDisplay() {
+    if (remainingSeconds > 0) {
+        const minutes = Math.floor(remainingSeconds / 60);
+        const seconds = remainingSeconds % 60;
+        timerDisplay.innerHTML = `⏰ Sẽ tắt sau: ${minutes}ph ${seconds.toString().padStart(2, '0')}s`;
+        timerDisplay.style.display = 'block';
+    } else {
+        timerDisplay.style.display = 'none';
+    }
+}
 
-document.getElementById('playBtn').onclick = () => { if (!curBookName) return alert("Chọn truyện!"); isReading = true; silentAudio.play(); startTimer(); speak(); };
-document.getElementById('stopBtn').onclick = stopReading;
-document.getElementById('chapterSelect').onchange = e => loadChapter(parseInt(e.target.value));
-document.getElementById('rate').oninput = e => document.getElementById('rateVal').innerText = e.target.value;
-function scroll() { document.getElementById(`s-${curSentIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-document.addEventListener('visibilitychange', () => { if (document.hidden && isReading) silentAudio.play().catch(()=>{}); });
+function resetAndStartTimer() {
+    // Lấy giá trị phút từ select
+    const minutes = parseInt(timerSelect.value);
+    
+    // Dừng timer cũ
+    stopTimer();
+    
+    // Nếu đang đọc và có hẹn giờ, khởi tạo timer mới
+    if (isReading && minutes > 0) {
+        startTimer(minutes);
+    }
+}
+
+// 4. ĐIỀU KHIỂN ÂM THANH & CHẠY NỀN
+function speak() {
+    if (curSentIdx >= currentSentences.length) {
+        if (curChapIdx < chapters.length - 1) {
+            curChapIdx++;
+            if (chapterSelect.options[curChapIdx]) {
+                chapterSelect.value = curChapIdx;
+            }
+            loadChapter(curChapIdx, false);
+            isReading = true;
+            speak();
+        }
+        return;
+    }
+    if (!isReading) return;
+    
+    // Hủy đang đọc
+    if (synth.speaking) {
+        synth.cancel();
+    }
+    
+    let utter = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
+    utter.lang = 'vi-VN';
+    utter.rate = parseFloat(rateInput.value);
+    
+    utter.onstart = function() {
+        document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
+        const currentSpan = document.getElementById(`s-${curSentIdx}`);
+        if (currentSpan) currentSpan.classList.add('highlight');
+        scrollToSentence();
+        if (curBookName) {
+            localStorage.setItem("pos_" + curBookName, `${curChapIdx}_${curSentIdx}`);
+        }
+        updateMediaSession();
+    };
+    
+    utter.onend = function() {
+        if (isReading) {
+            curSentIdx++;
+            speak();
+        }
+    };
+    
+    utter.onerror = function(e) {
+        console.error("Speech error:", e);
+        if (isReading) {
+            curSentIdx++;
+            speak();
+        }
+    };
+    
+    synth.speak(utter);
+}
+
+function updateMediaSession() {
+    if ('mediaSession' in navigator && curBookName) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: curBookName,
+            artist: `Chương ${curChapIdx + 1}`,
+            artwork: [{ src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }]
+        });
+        navigator.mediaSession.setActionHandler('play', function() {
+            isReading = true;
+            speak();
+        });
+        navigator.mediaSession.setActionHandler('pause', stopReading);
+    }
+}
+
+function stopReading() {
+    isReading = false;
+    synth.cancel();
+    silentAudio.pause();
+    
+    // KHÔNG dừng timer ở đây - timer vẫn chạy độc lập
+    // Timer sẽ tiếp tục đếm và tự động dừng khi hết giờ
+}
+
+// 5. EVENT LISTENERS
+document.getElementById('playBtn').onclick = function() {
+    if (!curBookName) {
+        alert("Vui lòng chọn hoặc tải lên một truyện!");
+        return;
+    }
+    if (currentSentences.length === 0) {
+        alert("Không có nội dung để đọc!");
+        return;
+    }
+    
+    // Nếu đang dừng và nhấn phát lại
+    if (!isReading) {
+        isReading = true;
+        silentAudio.play().catch(e => console.log("Audio play error:", e));
+        
+        // Reset timer: dừng timer cũ và khởi tạo lại từ đầu
+        const minutes = parseInt(timerSelect.value);
+        if (minutes > 0) {
+            startTimer(minutes); // Bắt đầu timer mới
+        }
+        
+        speak(); // Tiếp tục đọc từ vị trí hiện tại
+    }
+};
+
+document.getElementById('stopBtn').onclick = function() {
+    stopReading();
+    // Dừng timer khi nhấn nút Dừng
+    stopTimer();
+    timerDisplay.style.display = 'none';
+};
+
+chapterSelect.onchange = function(e) {
+    loadChapter(parseInt(e.target.value), false);
+    // Nếu đang đọc và đổi chương, reset timer
+    if (isReading) {
+        const minutes = parseInt(timerSelect.value);
+        if (minutes > 0) {
+            startTimer(minutes);
+        }
+    }
+};
+
+rateInput.oninput = function(e) {
+    rateVal.innerText = e.target.value;
+    // Nếu đang đọc, cập nhật tốc độ cho câu tiếp theo
+};
+
+// Khi người dùng thay đổi thời gian trong select, cập nhật timer nếu đang đọc
+timerSelect.onchange = function() {
+    if (isReading) {
+        const minutes = parseInt(timerSelect.value);
+        if (minutes > 0) {
+            startTimer(minutes); // Reset timer với thời gian mới
+        } else {
+            stopTimer(); // Tắt timer nếu chọn "Không hẹn giờ"
+            timerDisplay.style.display = 'none';
+        }
+    }
+};
+
+// Khởi tạo
+rateVal.innerText = rateInput.value;
