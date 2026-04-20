@@ -1,24 +1,25 @@
 :root { --primary: #007aff; --bg: #f2f2f7; --card: #ffffff; }
-body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; }
+body { font-family: -apple-system, sans-serif; background: var(--bg); padding: 15px; margin: 0; -webkit-tap-highlight-color: transparent; }
 .container { max-width: 550px; margin: auto; background: var(--card); padding: 20px; border-radius: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
 
 #displayBox { 
-    width: 100%; height: 300px; overflow-y: auto; border: 1px solid #e5e5ea; 
+    width: 100%; height: 320px; overflow-y: auto; border: 1px solid #e5e5ea; 
     border-radius: 15px; padding: 18px; box-sizing: border-box; background: #fafafa;
     line-height: 1.8; font-size: 19px; margin-bottom: 12px;
 }
-.sentence { cursor: pointer; border-radius: 4px; padding: 2px 0; }
-.highlight { background-color: #ffeb3b !important; font-weight: bold; }
+.sentence { cursor: pointer; border-radius: 4px; padding: 2px 0; transition: background 0.2s; }
+.highlight { background-color: #ffeb3b !important; font-weight: bold; box-shadow: 0 0 8px #ffeb3b; }
 
 .control-group { background: #f2f2f7; padding: 15px; border-radius: 15px; margin-bottom: 15px; }
-label { font-size: 13px; color: #8e8e93; text-transform: uppercase; display: block; margin-bottom: 5px; }
+label { font-size: 12px; color: #8e8e93; text-transform: uppercase; font-weight: 600; display: block; margin-bottom: 5px; }
 
 .timer-display { font-weight: bold; color: #ff3b30; text-align: center; font-size: 14px; margin-top: 5px; min-height: 20px; }
 .buttons { display: flex; gap: 12px; margin-bottom: 15px; }
-button { flex: 1; padding: 16px; border: none; border-radius: 14px; font-weight: 600; font-size: 16px; cursor: pointer; }
+button { flex: 1; padding: 16px; border: none; border-radius: 14px; font-weight: 600; font-size: 16px; cursor: pointer; transition: transform 0.1s; }
+button:active { transform: scale(0.98); }
 .btn-play { background: var(--primary); color: white; }
 .btn-stop { background: #ff3b30; color: white; }
 
-select, input[type="range"] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #d1d1d6; background: white; margin-bottom: 10px; font-size: 15px; }
+select, input[type="range"] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #d1d1d6; background: white; margin-bottom: 10px; font-size: 15px; appearance: none; }
 .library-section { margin-top: 20px; border-top: 1px solid #e5e5ea; padding-top: 15px; }
-.book-item { display: flex; justify-content: space-between; background: #fff; padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 1px solid #e5e5ea; }
+.book-item { display: flex; justify-content: space-between; background: #fff; padding: 12px; border-radius: 10px; margin-bottom: 8px; border: 1px solid #e5e5ea; font-size: 14px; }
