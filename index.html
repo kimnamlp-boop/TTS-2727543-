@@ -33,14 +33,6 @@
         .btn-play { background: var(--primary); color: white; }
         .btn-stop { background: #ff3b30; color: white; }
 
-        /* Timer hiển thị */
-        #timerDisplay { 
-            font-size: 16px; font-weight: 600; text-align: center; 
-            margin-top: 8px; padding: 8px; border-radius: 8px;
-            background: #fef2f2; color: #d32f2f; border: 1px solid #ffcdd2;
-            display: none;
-        }
-
         /* Thư viện truyện */
         .library-section { margin-top: 25px; border-top: 1px solid #e5e5ea; padding-top: 20px; }
         .book-item { 
@@ -79,7 +71,6 @@
             <option value="30">30 phút</option>
             <option value="60">60 phút</option>
         </select>
-        <div id="timerDisplay"></div>
     </div>
 
     <div class="buttons">
@@ -101,19 +92,12 @@
     let db, synth = window.speechSynthesis;
     let chapters = [], currentSentences = [];
     let curChapIdx = 0, curSentIdx = 0;
-    let isReading = false, curBookName = "";
-    
-    // HỆ THỐNG TIMER ỔN ĐỊNH
-    let timerInterval = null;
-    let remainingTime = 0;
-    let isTimerActive = false;
+    let isReading = false, curBookName = "", sleepTimer = null;
 
     const silentAudio = document.getElementById('silentAudio');
     const displayBox = document.getElementById('displayBox');
     const chapterSelect = document.getElementById('chapterSelect');
     const rateInput = document.getElementById('rate');
-    const timerSelect = document.getElementById('timer');
-    const timerDisplay = document.getElementById('timerDisplay');
 
     // 1. DATABASE & THƯ VIỆN
     const request = indexedDB.open("ProReaderDB", 2);
@@ -206,55 +190,10 @@
         scroll();
     }
 
-    // 3. HỆ THỐNG TIMER ỔN ĐỊNH
-    function startTimer(minutes) {
-        if (minutes === 0) return;
-        
-        remainingTime = minutes * 60; // Chuyển sang giây
-        isTimerActive = true;
-        timerDisplay.style.display = 'block';
-        
-        // Dừng timer cũ nếu có
-        stopTimer();
-        
-        // Bắt đầu timer mới với setInterval độc lập
-        timerInterval = setInterval(() => {
-            remainingTime--;
-            
-            // Hiển thị thời gian còn lại
-            const mins = Math.floor(remainingTime / 60);
-            const secs = remainingTime % 60;
-            timerDisplay.textContent = `⏰ Sẽ tắt sau: ${mins}ph ${secs.toString().padStart(2, '0')}s`;
-            
-            // Kiểm tra hết giờ
-            if (remainingTime <= 0) {
-                stopTimer();
-                stopReading();
-                alert("⏰ Hết giờ đọc! Đã dừng tự động.");
-            }
-        }, 1000); // Cập nhật mỗi giây
-    }
-
-    function stopTimer() {
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
-        isTimerActive = false;
-        remainingTime = 0;
-        timerDisplay.style.display = 'none';
-    }
-
-    // 4. ĐIỀU KHIỂN ÂM THANH
+    // 3. ĐIỀU KHIỂN ÂM THANH & CHẠY NỀN
     function speak() {
         if (curSentIdx >= currentSentences.length) {
-            if (curChapIdx < chapters.length - 1) { 
-                curChapIdx++; 
-                chapterSelect.value = curChapIdx; 
-                loadChapter(curChapIdx); 
-                isReading = true; 
-                speak(); 
-            }
+            if (curChapIdx < chapters.length - 1) { curChapIdx++; chapterSelect.value = curChapIdx; loadChapter(curChapIdx); isReading = true; speak(); }
             return;
         }
         if (!isReading) return;
@@ -288,29 +227,17 @@
         }
     }
 
-    function stopReading() { 
-        isReading = false; 
-        synth.cancel(); 
-        silentAudio.pause(); 
-        stopTimer(); // Dừng timer khi nhấn STOP
-    }
-
+    function stopReading() { isReading = false; synth.cancel(); silentAudio.pause(); clearTimeout(sleepTimer); }
     function scroll() { document.getElementById(`s-${curSentIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
 
-    // EVENT LISTENERS
     document.getElementById('playBtn').onclick = () => {
         if (!curBookName) return alert("Chọn truyện!");
-        
         isReading = true;
         silentAudio.play();
-        
-        // RESET & START TIMER MỚI khi nhấn PHÁT
-        const mins = parseInt(timerSelect.value);
-        startTimer(mins);
-        
+        const mins = parseInt(document.getElementById('timer').value);
+        if (mins > 0) sleepTimer = setTimeout(() => { stopReading(); alert("Hết giờ!"); }, mins * 60000);
         speak();
     };
-    
     document.getElementById('stopBtn').onclick = stopReading;
     chapterSelect.onchange = e => loadChapter(parseInt(e.target.value));
     rateInput.oninput = e => document.getElementById('rateVal').innerText = e.target.value;
