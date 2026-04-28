@@ -7,77 +7,73 @@
     <title>Audio Reader Ultimate</title>
     <style>
         :root { --primary: #007aff; --bg: #f2f2f7; --card: #ffffff; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); padding: 15px; padding-bottom: 100px; margin: 0; color: #1c1c1e; }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); padding: 15px; padding-bottom: 110px; margin: 0; color: #1c1c1e; }
         .container { max-width: 550px; margin: auto; background: var(--card); padding: 20px; border-radius: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
 
 ```
-    /* Ô văn bản — giữ nguyên như bản gốc */
-    #displayBox { 
-        width: 100%; height: 320px; overflow-y: auto; border: 1px solid #e5e5ea; 
-        border-radius: 15px; padding: 18px; box-sizing: border-box; background: #fafafa;
-        line-height: 1.8; font-size: 19px; margin-bottom: 12px;
-        -webkit-overflow-scrolling: touch;
+    /* ---- ĐIỀU HƯỚNG CHƯƠNG ---- */
+    .chapter-nav { display: flex; gap: 6px; margin-bottom: 15px; align-items: center; }
+    .btn-chap {
+        flex: 0 0 42px; width: 42px; height: 42px; padding: 0;
+        background: #f2f2f7; color: #1c1c1e; border: 1px solid #d1d1d6;
+        border-radius: 10px; font-size: 22px; line-height: 1; display: flex; align-items: center; justify-content: center;
+        cursor: pointer; transition: background 0.15s;
     }
+    .btn-chap:active { background: #d1d1d6; }
+    .btn-chap:disabled { opacity: 0.3; cursor: default; }
+    #chapterSelect { flex: 1; padding: 11px 10px; border-radius: 10px; border: 1px solid #d1d1d6; font-size: 15px; background: white; appearance: none; }
+
+    /* ---- Ô VĂN BẢN ---- */
+    .display-toolbar {
+        display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 6px;
+    }
+    .btn-view {
+        padding: 5px 13px; background: #f2f2f7; border: 1px solid #d1d1d6;
+        border-radius: 8px; font-size: 13px; color: #3a3a3c; cursor: pointer;
+        font-weight: 500; transition: background 0.15s; white-space: nowrap;
+    }
+    .btn-view:active { background: #d1d1d6; }
+    .btn-view.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+    #displayBox {
+        width: 100%; border: 1px solid #e5e5ea; border-radius: 15px;
+        padding: 18px; background: #fafafa; line-height: 1.8; font-size: 19px;
+        -webkit-overflow-scrolling: touch; margin-bottom: 12px;
+        transition: min-height 0.2s;
+    }
+    /* CHẾ ĐỘ THU GỌN: chỉ hiển thị câu đang đọc */
+    #displayBox.compact { overflow: hidden; min-height: 70px; }
+    #displayBox.compact .sentence { display: none; }
+    #displayBox.compact .sentence.highlight { display: inline; }
+    /* CHẾ ĐỘ TOÀN BỘ: cuộn được */
+    #displayBox.full { height: 320px; overflow-y: auto; }
+
     .sentence { cursor: pointer; border-radius: 4px; padding: 2px 0; transition: background 0.2s; }
-    .highlight { background-color: #ffeb3b !important; font-weight: bold; box-shadow: 0 0 8px #ffeb3b; }
-    
-    .chapter-nav { display: flex; gap: 8px; margin-bottom: 15px; }
-    #chapterSelect { flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #d1d1d6; font-size: 16px; background: white; appearance: none; }
+    .highlight { background-color: #ffeb3b !important; font-weight: bold; box-shadow: 0 0 8px rgba(255,235,59,0.7); }
 
+    /* ---- CONTROLS ---- */
     .control-group { background: #f2f2f7; padding: 15px; border-radius: 15px; margin-bottom: 15px; }
-    label { font-size: 13px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; }
+    label { font-size: 13px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; display: block; }
+    input[type="range"] { width: 100%; height: 25px; margin: 8px 0; }
+    select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #d1d1d6; margin-top: 5px; font-size: 15px; background: white; }
 
-    /* Nút cố định ở đáy màn hình */
-    .buttons-fixed {
-        position: fixed;
-        bottom: 0; left: 0; right: 0;
-        z-index: 100;
-        background: rgba(255,255,255,0.92);
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
-        border-top: 1px solid #e5e5ea;
-        padding: 12px 20px;
-        padding-bottom: calc(12px + env(safe-area-inset-bottom));
-        display: flex;
-        gap: 12px;
-    }
-    @media (min-width: 590px) {
-        .buttons-fixed {
-            left: 50%; transform: translateX(-50%);
-            width: 550px; border-radius: 20px 20px 0 0;
-        }
-    }
-    button { flex: 1; padding: 16px; border: none; border-radius: 14px; font-weight: 600; font-size: 16px; cursor: pointer; transition: opacity 0.2s; }
-    button:active { opacity: 0.7; }
-    .btn-play { background: var(--primary); color: white; }
-    .btn-stop { background: #ff3b30; color: white; }
-
-    /* ---- TIMER COUNTDOWN ---- */
+    /* ---- TIMER ---- */
     #timerDisplay {
-        display: none;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        background: #fff3cd;
-        border: 1px solid #ffc107;
-        border-radius: 12px;
-        padding: 10px 16px;
-        margin-bottom: 15px;
-        font-size: 15px;
-        font-weight: 600;
-        color: #856404;
+        display: none; align-items: center; justify-content: center; gap: 10px;
+        background: #fff3cd; border: 1px solid #ffc107; border-radius: 12px;
+        padding: 10px 16px; margin-bottom: 15px; font-size: 15px; font-weight: 600; color: #856404;
     }
     #timerDisplay.active { display: flex; }
-    #timerDisplay .timer-icon { font-size: 20px; }
     #timerCountdown { font-size: 20px; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
     #cancelTimer {
         background: none; border: 1px solid #ffc107; color: #856404;
-        padding: 4px 10px; border-radius: 8px; font-size: 13px;
-        cursor: pointer; flex: unset;
+        padding: 4px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; flex: 0 0 auto;
     }
 
+    /* ---- THƯ VIỆN ---- */
     .library-section { margin-top: 25px; border-top: 1px solid #e5e5ea; padding-top: 20px; }
-    .book-item { 
+    .book-item {
         display: flex; justify-content: space-between; align-items: center;
         background: #fff; padding: 14px; border-radius: 12px; margin-bottom: 10px;
         font-size: 15px; border: 1px solid #e5e5ea;
@@ -85,8 +81,22 @@
     .book-item.active { border-color: var(--primary); background: #f0f7ff; }
     .delete-btn { color: #ff3b30; font-size: 13px; padding: 5px; cursor: pointer; }
 
-    input[type="range"] { width: 100%; height: 25px; margin: 10px 0; }
-    select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #d1d1d6; margin-top: 5px; }
+    /* ---- NÚT CỐ ĐỊNH ĐÁY ---- */
+    .buttons-fixed {
+        position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+        background: rgba(255,255,255,0.93);
+        backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        border-top: 1px solid #e5e5ea;
+        padding: 12px 20px; padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        display: flex; gap: 12px;
+    }
+    @media (min-width: 590px) {
+        .buttons-fixed { left: 50%; transform: translateX(-50%); width: 550px; border-radius: 20px 20px 0 0; }
+    }
+    .btn-main { flex: 1; padding: 16px; border: none; border-radius: 14px; font-weight: 600; font-size: 16px; cursor: pointer; transition: opacity 0.2s; }
+    .btn-main:active { opacity: 0.7; }
+    .btn-play { background: var(--primary); color: white; }
+    .btn-stop { background: #ff3b30; color: white; }
 </style>
 ```
 
@@ -97,17 +107,25 @@
     <h2 style="text-align:center; margin-top:0;">Web Audiobook Pro</h2>
 
 ```
-<input type="file" id="fileInput" accept=".txt" style="margin-bottom: 15px; width: 100%;">
+<input type="file" id="fileInput" accept=".txt" style="margin-bottom:15px; width:100%;">
 
+<!-- Điều hướng chương: ‹ Select › -->
 <div class="chapter-nav">
+    <button class="btn-chap" id="prevChap" title="Chương trước" disabled>‹</button>
     <select id="chapterSelect"><option>Chọn chương...</option></select>
+    <button class="btn-chap" id="nextChap" title="Chương sau" disabled>›</button>
 </div>
 
-<div id="displayBox">Đang chờ tải file...</div>
+<!-- Toolbar + ô văn bản -->
+<div class="display-toolbar">
+    <button class="btn-view active" id="btnCompact">Thu gọn</button>
+    <button class="btn-view"        id="btnFull">Toàn bộ</button>
+</div>
+<div id="displayBox" class="compact">Đang chờ tải file...</div>
 
-<!-- TIMER COUNTDOWN BAR -->
+<!-- Timer countdown -->
 <div id="timerDisplay">
-    <span class="timer-icon">⏳</span>
+    <span>⏳</span>
     <span>Tắt sau: <span id="timerCountdown">--:--</span></span>
     <button id="cancelTimer">Huỷ</button>
 </div>
@@ -115,7 +133,6 @@
 <div class="control-group">
     <label>Tốc độ đọc: <span id="rateVal">1.0</span>x</label>
     <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
-    
     <label>Hẹn giờ tắt:</label>
     <select id="timer">
         <option value="0">Không hẹn giờ</option>
@@ -133,11 +150,9 @@
 
 </div>
 
-<!-- Nút PHÁT/DỪNG cố định đáy màn hình -->
-
 <div class="buttons-fixed">
-    <button class="btn-play" id="playBtn">▶ PHÁT</button>
-    <button class="btn-stop" id="stopBtn">■ DỪNG</button>
+    <button class="btn-main btn-play" id="playBtn">▶ PHÁT</button>
+    <button class="btn-main btn-stop" id="stopBtn">■ DỪNG</button>
 </div>
 
 <audio id="silentAudio" loop>
@@ -148,39 +163,39 @@
     let db, synth = window.speechSynthesis;
     let chapters = [], currentSentences = [];
     let curChapIdx = 0, curSentIdx = 0;
-    let isReading = false, curBookName = "", sleepTimer = null;
+    let isReading = false, curBookName = "";
+    let sleepTimerInterval = null, sleepEndTime = 0;
+    let isCompact = true;
 
-    // ---- TIMER STATE ----
-    let sleepTimerInterval = null;   // setInterval cho đếm ngược
-    let sleepEndTime = 0;            // timestamp khi hết giờ
-
-    const silentAudio = document.getElementById('silentAudio');
-    const displayBox = document.getElementById('displayBox');
-    const chapterSelect = document.getElementById('chapterSelect');
-    const rateInput = document.getElementById('rate');
-    const timerDisplay = document.getElementById('timerDisplay');
+    const silentAudio    = document.getElementById('silentAudio');
+    const displayBox     = document.getElementById('displayBox');
+    const chapterSelect  = document.getElementById('chapterSelect');
+    const rateInput      = document.getElementById('rate');
+    const timerDisplay   = document.getElementById('timerDisplay');
     const timerCountdown = document.getElementById('timerCountdown');
+    const prevChapBtn    = document.getElementById('prevChap');
+    const nextChapBtn    = document.getElementById('nextChap');
+    const btnCompact     = document.getElementById('btnCompact');
+    const btnFull        = document.getElementById('btnFull');
 
-    // 1. DATABASE & THƯ VIỆN
+    // ---- DATABASE ----
     const request = indexedDB.open("ProReaderDB", 2);
     request.onupgradeneeded = e => { e.target.result.createObjectStore("books", { keyPath: "name" }); };
     request.onsuccess = e => { db = e.target.result; refreshLib(); };
 
     document.getElementById('fileInput').onchange = e => {
-        const file = e.target.files[0];
-        if (!file) return;
+        const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = ev => {
-            const transaction = db.transaction(["books"], "readwrite");
-            transaction.objectStore("books").put({ name: file.name, data: ev.target.result });
-            transaction.oncomplete = () => { loadBook(file.name); refreshLib(); };
+            const tx = db.transaction(["books"], "readwrite");
+            tx.objectStore("books").put({ name: file.name, data: ev.target.result });
+            tx.oncomplete = () => { loadBook(file.name); refreshLib(); };
         };
         reader.readAsText(file);
     };
 
     function refreshLib() {
-        const list = document.getElementById('bookList');
-        list.innerHTML = "";
+        const list = document.getElementById('bookList'); list.innerHTML = "";
         db.transaction(["books"], "readonly").objectStore("books").getAll().onsuccess = e => {
             e.target.result.forEach(book => {
                 const item = document.createElement('div');
@@ -193,15 +208,15 @@
     }
 
     function deleteBook(name) {
-        if(confirm("Xóa truyện này khỏi thư viện?")) {
+        if (confirm("Xóa truyện này khỏi thư viện?")) {
             db.transaction(["books"], "readwrite").objectStore("books").delete(name).onsuccess = () => {
-                if(curBookName === name) { curBookName = ""; displayBox.innerText = "Đã xóa."; }
+                if (curBookName === name) { curBookName = ""; displayBox.innerText = "Đã xóa."; }
                 refreshLib();
             };
         }
     }
 
-    // 2. XỬ LÝ NỘI DUNG & CHƯƠNG
+    // ---- TẢI SÁCH ----
     function loadBook(name) {
         curBookName = name;
         db.transaction(["books"], "readonly").objectStore("books").get(name).onsuccess = e => {
@@ -214,7 +229,7 @@
                 if (match.index > 0) chapters.push(text.substring(lastIdx, match.index));
                 const opt = document.createElement('option');
                 opt.value = chapters.length;
-                opt.innerText = match[0].trim().substring(0, 35);
+                opt.innerText = match[0].trim().substring(0, 40);
                 chapterSelect.appendChild(opt);
                 lastIdx = match.index;
             }
@@ -230,61 +245,89 @@
         };
     }
 
+    // ---- TẢI CHƯƠNG ----
     function loadChapter(idx, useSavedSent = false) {
         stopReading();
         curChapIdx = idx;
         if (!useSavedSent) curSentIdx = 0;
+        chapterSelect.value = idx;
         const text = chapters[idx];
         currentSentences = text.match(/[^.!?\n]+[.!?\n]?/g) || [text];
         currentSentences = currentSentences.map(s => s.trim()).filter(s => s.length > 0);
+        updateChapButtons();
         renderText();
     }
 
+    function updateChapButtons() {
+        prevChapBtn.disabled = curChapIdx <= 0;
+        nextChapBtn.disabled = curChapIdx >= chapters.length - 1;
+    }
+
+    // ---- RENDER ----
     function renderText() {
         displayBox.innerHTML = '';
         currentSentences.forEach((s, i) => {
             const span = document.createElement('span');
-            span.id = `s-${i}`; span.className = 'sentence' + (i === curSentIdx ? ' highlight' : '');
+            span.id = `s-${i}`;
+            span.className = 'sentence' + (i === curSentIdx ? ' highlight' : '');
             span.innerText = s + ' ';
             span.onclick = () => { curSentIdx = i; isReading = true; speak(); };
             displayBox.appendChild(span);
         });
-        scroll();
+        applyViewMode();
+        scrollToSentence();
     }
 
-    // 3. ĐIỀU KHIỂN ÂM THANH
+    // ---- CHẾ ĐỘ XEM ----
+    function applyViewMode() {
+        if (isCompact) {
+            displayBox.classList.replace('full', 'compact') || displayBox.classList.add('compact');
+            btnCompact.classList.add('active'); btnFull.classList.remove('active');
+        } else {
+            displayBox.classList.replace('compact', 'full') || displayBox.classList.add('full');
+            btnFull.classList.add('active'); btnCompact.classList.remove('active');
+        }
+    }
+
+    btnCompact.onclick = () => { isCompact = true;  applyViewMode(); };
+    btnFull.onclick    = () => { isCompact = false; applyViewMode(); scrollToSentence(); };
+
+    // ---- PHÁT ÂM THANH ----
     function speak() {
         if (curSentIdx >= currentSentences.length) {
             if (curChapIdx < chapters.length - 1) {
-                curChapIdx++; chapterSelect.value = curChapIdx;
-                loadChapter(curChapIdx); isReading = true; speak();
+                curChapIdx++; loadChapter(curChapIdx); isReading = true; speak();
             }
             return;
         }
         if (!isReading) return;
 
         synth.cancel();
-        let utter = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
+        const utter = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
         utter.lang = 'vi-VN';
         utter.rate = parseFloat(rateInput.value);
 
         utter.onstart = () => {
             document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
             document.getElementById(`s-${curSentIdx}`)?.classList.add('highlight');
-            scroll();
+            scrollToSentence();
             localStorage.setItem("pos_" + curBookName, `${curChapIdx}_${curSentIdx}`);
             updateMediaSession();
         };
-
         utter.onend = () => { if (isReading) { curSentIdx++; speak(); } };
         synth.speak(utter);
+    }
+
+    function scrollToSentence() {
+        if (!isCompact) {
+            document.getElementById(`s-${curSentIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     }
 
     function updateMediaSession() {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
-                title: curBookName,
-                artist: `Chương ${curChapIdx + 1}`,
+                title: curBookName, artist: `Chương ${curChapIdx + 1}`,
                 artwork: [{ src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }]
             });
             navigator.mediaSession.setActionHandler('play', () => { isReading = true; speak(); });
@@ -293,89 +336,56 @@
     }
 
     function stopReading() {
-        isReading = false;
-        synth.cancel();
-        silentAudio.pause();
-        clearSleepTimer();
+        isReading = false; synth.cancel(); silentAudio.pause(); clearSleepTimer();
     }
 
-    function scroll() {
-        document.getElementById(`s-${curSentIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-
-    // ---- SLEEP TIMER FIX ----
+    // ---- SLEEP TIMER ----
     function startSleepTimer(minutes) {
-        clearSleepTimer(); // xoá timer cũ nếu có
-        if (minutes <= 0) return;
-
+        clearSleepTimer(); if (minutes <= 0) return;
         sleepEndTime = Date.now() + minutes * 60 * 1000;
-
-        // Dùng setInterval để đếm ngược mỗi giây — chắc chắn hơn setTimeout đơn lẻ
         timerDisplay.classList.add('active');
         updateCountdownDisplay();
-
         sleepTimerInterval = setInterval(() => {
             const remaining = sleepEndTime - Date.now();
             if (remaining <= 0) {
-                // HẾT GIỜ: dừng đọc không dùng alert (alert block iOS)
-                clearSleepTimer();
-                isReading = false;
-                synth.cancel();
-                silentAudio.pause();
+                clearSleepTimer(); isReading = false; synth.cancel(); silentAudio.pause();
                 showTimerEndNotice();
-            } else {
-                updateCountdownDisplay();
-            }
-        }, 500); // check 2 lần/giây để chính xác hơn
+            } else { updateCountdownDisplay(); }
+        }, 500);
     }
 
     function updateCountdownDisplay() {
-        const remaining = Math.max(0, sleepEndTime - Date.now());
-        const totalSec = Math.ceil(remaining / 1000);
-        const m = Math.floor(totalSec / 60);
-        const s = totalSec % 60;
-        timerCountdown.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        const s = Math.ceil(Math.max(0, sleepEndTime - Date.now()) / 1000);
+        timerCountdown.textContent = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
     }
 
     function clearSleepTimer() {
         if (sleepTimerInterval) { clearInterval(sleepTimerInterval); sleepTimerInterval = null; }
-        sleepEndTime = 0;
-        timerDisplay.classList.remove('active');
-        timerCountdown.textContent = '--:--';
+        sleepEndTime = 0; timerDisplay.classList.remove('active'); timerCountdown.textContent = '--:--';
     }
 
     function showTimerEndNotice() {
-        // Thay alert bằng hiện thông báo inline (không block thread)
-        timerDisplay.classList.add('active');
-        timerCountdown.textContent = 'Hết giờ!';
-        timerDisplay.style.background = '#f8d7da';
-        timerDisplay.style.borderColor = '#f5c2c7';
-        timerDisplay.style.color = '#842029';
+        timerDisplay.classList.add('active'); timerCountdown.textContent = 'Hết giờ!';
+        Object.assign(timerDisplay.style, { background:'#f8d7da', borderColor:'#f5c2c7', color:'#842029' });
         setTimeout(() => {
             timerDisplay.classList.remove('active');
-            timerDisplay.style.background = '';
-            timerDisplay.style.borderColor = '';
-            timerDisplay.style.color = '';
+            Object.assign(timerDisplay.style, { background:'', borderColor:'', color:'' });
         }, 4000);
     }
 
     // ---- EVENT LISTENERS ----
     document.getElementById('playBtn').onclick = () => {
         if (!curBookName) return alert("Chọn truyện!");
-        isReading = true;
-        silentAudio.play();
-        const mins = parseInt(document.getElementById('timer').value);
-        startSleepTimer(mins); // luôn gọi (tự bỏ qua nếu mins=0)
+        isReading = true; silentAudio.play();
+        startSleepTimer(parseInt(document.getElementById('timer').value));
         speak();
     };
-
     document.getElementById('stopBtn').onclick = stopReading;
-
     document.getElementById('cancelTimer').onclick = () => {
-        clearSleepTimer();
-        document.getElementById('timer').value = '0'; // reset select về "Không hẹn giờ"
+        clearSleepTimer(); document.getElementById('timer').value = '0';
     };
-
+    prevChapBtn.onclick = () => { if (curChapIdx > 0) loadChapter(curChapIdx - 1); };
+    nextChapBtn.onclick = () => { if (curChapIdx < chapters.length - 1) loadChapter(curChapIdx + 1); };
     chapterSelect.onchange = e => loadChapter(parseInt(e.target.value));
     rateInput.oninput = e => document.getElementById('rateVal').innerText = e.target.value;
 </script>
