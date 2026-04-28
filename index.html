@@ -247,7 +247,7 @@
 
     // ---- TẢI CHƯƠNG ----
     function loadChapter(idx, useSavedSent = false) {
-        stopReading();
+        pauseReading();
         curChapIdx = idx;
         if (!useSavedSent) curSentIdx = 0;
         chapterSelect.value = idx;
@@ -331,12 +331,17 @@
                 artwork: [{ src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }]
             });
             navigator.mediaSession.setActionHandler('play', () => { isReading = true; speak(); });
-            navigator.mediaSession.setActionHandler('pause', stopReading);
+            navigator.mediaSession.setActionHandler('pause', pauseReading);
         }
     }
 
+    // Dừng tạm (chuyển chương) — GIỮ NGUYÊN sleep timer
+    function pauseReading() {
+        isReading = false; synth.cancel(); silentAudio.pause();
+    }
+    // Dừng hoàn toàn (nút DỪNG) — xóa sleep timer
     function stopReading() {
-        isReading = false; synth.cancel(); silentAudio.pause(); clearSleepTimer();
+        pauseReading(); clearSleepTimer();
     }
 
     // ---- SLEEP TIMER ----
