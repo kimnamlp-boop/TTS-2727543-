@@ -7,11 +7,11 @@
     <title>Audio Reader Ultimate</title>
     <style>
         :root { --primary: #007aff; --bg: #f2f2f7; --card: #ffffff; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); padding: 15px; margin: 0; color: #1c1c1e; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); padding: 15px; padding-bottom: 100px; margin: 0; color: #1c1c1e; }
         .container { max-width: 550px; margin: auto; background: var(--card); padding: 20px; border-radius: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
 
 ```
-/* Màn hình hiển thị văn bản */
+    /* Ô văn bản — giữ nguyên như bản gốc */
     #displayBox { 
         width: 100%; height: 320px; overflow-y: auto; border: 1px solid #e5e5ea; 
         border-radius: 15px; padding: 18px; box-sizing: border-box; background: #fafafa;
@@ -26,8 +26,27 @@
 
     .control-group { background: #f2f2f7; padding: 15px; border-radius: 15px; margin-bottom: 15px; }
     label { font-size: 13px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; }
-    
-    .buttons { display: flex; gap: 12px; }
+
+    /* Nút cố định ở đáy màn hình */
+    .buttons-fixed {
+        position: fixed;
+        bottom: 0; left: 0; right: 0;
+        z-index: 100;
+        background: rgba(255,255,255,0.92);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-top: 1px solid #e5e5ea;
+        padding: 12px 20px;
+        padding-bottom: calc(12px + env(safe-area-inset-bottom));
+        display: flex;
+        gap: 12px;
+    }
+    @media (min-width: 590px) {
+        .buttons-fixed {
+            left: 50%; transform: translateX(-50%);
+            width: 550px; border-radius: 20px 20px 0 0;
+        }
+    }
     button { flex: 1; padding: 16px; border: none; border-radius: 14px; font-weight: 600; font-size: 16px; cursor: pointer; transition: opacity 0.2s; }
     button:active { opacity: 0.7; }
     .btn-play { background: var(--primary); color: white; }
@@ -106,17 +125,19 @@
     </select>
 </div>
 
-<div class="buttons">
-    <button class="btn-play" id="playBtn">PHÁT</button>
-    <button class="btn-stop" id="stopBtn">DỪNG</button>
-</div>
-
 <div class="library-section">
     <h3 style="font-size:16px; margin-bottom:15px;">Thư viện của bạn</h3>
     <div id="bookList"></div>
 </div>
 ```
 
+</div>
+
+<!-- Nút PHÁT/DỪNG cố định đáy màn hình -->
+
+<div class="buttons-fixed">
+    <button class="btn-play" id="playBtn">▶ PHÁT</button>
+    <button class="btn-stop" id="stopBtn">■ DỪNG</button>
 </div>
 
 <audio id="silentAudio" loop>
