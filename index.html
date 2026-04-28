@@ -314,7 +314,7 @@
             localStorage.setItem("pos_" + curBookName, `${curChapIdx}_${curSentIdx}`);
             updateMediaSession();
         };
-        utter.onend = () => { if (isReading) { curSentIdx++; speak(); } };
+        utter.onend = () => { if (isReading && sleepEndTime >= 0) { curSentIdx++; speak(); } };
         synth.speak(utter);
     }
 
@@ -348,7 +348,15 @@
         sleepTimerInterval = setInterval(() => {
             const remaining = sleepEndTime - Date.now();
             if (remaining <= 0) {
-                clearSleepTimer(); isReading = false; synth.cancel(); silentAudio.pause();
+                // Dừng interval trước để không gọi lại
+                clearInterval(sleepTimerInterval); sleepTimerInterval = null;
+                sleepEndTime = 0; timerDisplay.classList.remove('active'); timerCountdown.textContent = '--:--';
+                // Force stop — gọi nhiều lần để chắc chắn trên iOS
+                isReading = false;
+                synth.cancel();
+                silentAudio.pause(); silentAudio.currentTime = 0;
+                setTimeout(() => { synth.cancel(); }, 100);
+                setTimeout(() => { synth.cancel(); silentAudio.pause(); }, 300);
                 showTimerEndNotice();
             } else { updateCountdownDisplay(); }
         }, 500);
