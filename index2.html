@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Audio Reader Ultimate</title>
+    <!-- JSZip để đọc EPUB -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root { --primary: #007aff; --bg: #f2f2f7; --card: #ffffff; }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); padding: 15px; padding-bottom: 110px; margin: 0; color: #1c1c1e; }
+        .container { max-width: 550px; margin: auto; background: var(--card); padding: 20px; border-radius: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.08); }
+
+```
+    /* ---- GITHUB SETTINGS ---- */
+    .gh-section { background: #f0f7ff; border: 1px solid #bcd4f5; border-radius: 15px; padding: 14px; margin-bottom: 15px; }
+    .gh-section summary { font-weight: 600; font-size: 14px; color: #0055cc; cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+    .gh-section summary::before { content: "⚙️"; }
+    .gh-row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+    .gh-row input { flex: 1; padding: 9px 12px; border-radius: 8px; border: 1px solid #bcd4f5; font-size: 14px; background: white; }
+    .gh-row input::placeholder { color: #aaa; }
+    .btn-gh-save { padding: 9px 16px; background: #0055cc; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .gh-status { font-size: 12px; color: #666; margin-top: 6px; min-height: 16px; }
+    .gh-status.ok  { color: #28a745; }
+    .gh-status.err { color: #ff3b30; }
+
+    /* ---- FILE INPUT ---- */
+    .file-row { display: flex; gap: 8px; margin-bottom: 15px; align-items: center; }
+    .file-row input[type=file] { flex: 1; font-size: 14px; }
+    .btn-upload-gh { padding: 10px 14px; background: #28a745; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-upload-gh:disabled { opacity: 0.4; cursor: default; }
+
+    /* ---- CHAPTER NAV ---- */
+    .chapter-nav { display: flex; gap: 6px; margin-bottom: 15px; align-items: center; }
+    .btn-chap { flex: 0 0 42px; width: 42px; height: 42px; padding: 0; background: #f2f2f7; color: #1c1c1e; border: 1px solid #d1d1d6; border-radius: 10px; font-size: 22px; line-height: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.15s; }
+    .btn-chap:active { background: #d1d1d6; }
+    .btn-chap:disabled { opacity: 0.3; cursor: default; }
+    #chapterSelect { flex: 1; padding: 11px 10px; border-radius: 10px; border: 1px solid #d1d1d6; font-size: 15px; background: white; appearance: none; }
+
+    /* ---- DISPLAY BOX ---- */
+    .display-toolbar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 6px; }
+    .btn-view { padding: 5px 13px; background: #f2f2f7; border: 1px solid #d1d1d6; border-radius: 8px; font-size: 13px; color: #3a3a3c; cursor: pointer; font-weight: 500; transition: background 0.15s; white-space: nowrap; }
+    .btn-view:active { background: #d1d1d6; }
+    .btn-view.active { background: var(--primary); color: white; border-color: var(--primary); }
+    #displayBox { width: 100%; border: 1px solid #e5e5ea; border-radius: 15px; padding: 18px; background: #fafafa; line-height: 1.8; font-size: 19px; -webkit-overflow-scrolling: touch; margin-bottom: 12px; transition: min-height 0.2s; }
+    #displayBox.compact { overflow: hidden; min-height: 70px; }
+    #displayBox.compact .sentence { display: none; }
+    #displayBox.compact .sentence.highlight { display: inline; }
+    #displayBox.full { height: 320px; overflow-y: auto; }
+    .sentence { cursor: pointer; border-radius: 4px; padding: 2px 0; transition: background 0.2s; }
+    .highlight { background-color: #ffeb3b !important; font-weight: bold; box-shadow: 0 0 8px rgba(255,235,59,0.7); }
+
+    /* ---- CONTROLS ---- */
+    .control-group { background: #f2f2f7; padding: 15px; border-radius: 15px; margin-bottom: 15px; }
+    label { font-size: 13px; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px; display: block; }
+    input[type="range"] { width: 100%; height: 25px; margin: 8px 0; }
+    select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #d1d1d6; margin-top: 5px; font-size: 15px; background: white; }
+
+    /* ---- TIMER ---- */
+    #timerDisplay { display: none; align-items: center; justify-content: center; gap: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 12px; padding: 10px 16px; margin-bottom: 15px; font-size: 15px; font-weight: 600; color: #856404; }
+    #timerDisplay.active { display: flex; }
+    #timerCountdown { font-size: 20px; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+    #cancelTimer { background: none; border: 1px solid #ffc107; color: #856404; padding: 4px 10px; border-radius: 8px; font-size: 13px; cursor: pointer; flex: 0 0 auto; }
+
+    /* ---- LIBRARY ---- */
+    .library-section { margin-top: 25px; border-top: 1px solid #e5e5ea; padding-top: 20px; }
+    .book-item { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 14px; border-radius: 12px; margin-bottom: 10px; font-size: 15px; border: 1px solid #e5e5ea; }
+    .book-item.active { border-color: var(--primary); background: #f0f7ff; }
+    .book-badge { font-size: 11px; padding: 2px 7px; border-radius: 6px; font-weight: 600; margin-left: 6px; }
+    .badge-epub { background: #fff0e5; color: #c05c00; border: 1px solid #ffc499; }
+    .badge-txt  { background: #e5f0ff; color: #0055cc; border: 1px solid #99c2ff; }
+    .badge-gh   { background: #e5ffe5; color: #1a7f37; border: 1px solid #99e699; }
+    .delete-btn { color: #ff3b30; font-size: 13px; padding: 5px; cursor: pointer; }
+
+    /* ---- FIXED BUTTONS ---- */
+    .buttons-fixed { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: rgba(255,255,255,0.93); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid #e5e5ea; padding: 12px 20px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 12px; }
+    @media (min-width: 590px) { .buttons-fixed { left: 50%; transform: translateX(-50%); width: 550px; border-radius: 20px 20px 0 0; } }
+    .btn-main { flex: 1; padding: 16px; border: none; border-radius: 14px; font-weight: 600; font-size: 16px; cursor: pointer; transition: opacity 0.2s; }
+    .btn-main:active { opacity: 0.7; }
+    .btn-play { background: var(--primary); color: white; }
+    .btn-stop  { background: #ff3b30; color: white; }
+
+    /* ---- LOADING ---- */
+    .loading { text-align: center; padding: 20px; color: #888; font-size: 15px; }
+</style>
+```
+
+</head>
+<body>
+<div class="container">
+    <h2 style="text-align:center; margin-top:0;">📚 Web Audiobook Pro</h2>
+
+```
+<!-- GitHub Settings -->
+<details class="gh-section" id="ghDetails">
+    <summary>Cài đặt GitHub Storage</summary>
+    <div class="gh-row">
+        <input id="ghToken"  type="password" placeholder="GitHub Token (ghp_...)" autocomplete="off">
+    </div>
+    <div class="gh-row">
+        <input id="ghRepo"   type="text" placeholder="username/repo-name">
+        <input id="ghBranch" type="text" placeholder="branch (main)" value="main" style="max-width:90px;">
+    </div>
+    <div class="gh-row">
+        <input id="ghFolder" type="text" placeholder="Thư mục lưu (books)" value="books">
+        <button class="btn-gh-save" onclick="saveGhConfig()">Lưu</button>
+    </div>
+    <div class="gh-status" id="ghStatus"></div>
+</details>
+
+<!-- File Input + Upload -->
+<div class="file-row">
+    <input type="file" id="fileInput" accept=".txt,.epub">
+    <button class="btn-upload-gh" id="uploadGhBtn" onclick="uploadToGithub()" disabled title="Cần cài GitHub Token">☁ GitHub</button>
+</div>
+
+<!-- Chapter nav -->
+<div class="chapter-nav">
+    <button class="btn-chap" id="prevChap" disabled>‹</button>
+    <select id="chapterSelect"><option>Chọn chương...</option></select>
+    <button class="btn-chap" id="nextChap" disabled>›</button>
+</div>
+
+<!-- Text display -->
+<div class="display-toolbar">
+    <button class="btn-view active" id="btnCompact">Thu gọn</button>
+    <button class="btn-view"        id="btnFull">Toàn bộ</button>
+</div>
+<div id="displayBox" class="compact">Đang chờ tải file...</div>
+
+<!-- Timer -->
+<div id="timerDisplay">
+    <span>⏳</span>
+    <span>Tắt sau: <span id="timerCountdown">--:--</span></span>
+    <button id="cancelTimer">Huỷ</button>
+</div>
+
+<div class="control-group">
+    <label>Tốc độ đọc: <span id="rateVal">1.0</span>x</label>
+    <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+    <label>Hẹn giờ tắt:</label>
+    <select id="timer">
+        <option value="0">Không hẹn giờ</option>
+        <option value="15">15 phút</option>
+        <option value="30">30 phút</option>
+        <option value="60">60 phút</option>
+    </select>
+</div>
+
+<div class="library-section">
+    <h3 style="font-size:16px; margin-bottom:15px;">Thư viện của bạn</h3>
+    <div id="bookList"></div>
+</div>
+```
+
+</div>
+
+<div class="buttons-fixed">
+    <button class="btn-main btn-play" id="playBtn">▶ PHÁT</button>
+    <button class="btn-main btn-stop" id="stopBtn">■ DỪNG</button>
+</div>
+
+<audio id="silentAudio" loop>
+    <source src="https://raw.githubusercontent.com/anars/blank-audio/master/10-seconds-of-silence.mp3" type="audio/mp3">
+</audio>
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+let db, synth = window.speechSynthesis;
+let chapters = [], currentSentences = [];
+let curChapIdx = 0, curSentIdx = 0;
+let isReading = false, curBookName = "", curBookType = "txt";
+let sleepTimerInterval = null, sleepEndTime = 0;
+let isCompact = true;
+let lastLoadedFile = null; // File object cho nút upload
+
+const silentAudio    = document.getElementById('silentAudio');
+const displayBox     = document.getElementById('displayBox');
+const chapterSelect  = document.getElementById('chapterSelect');
+const rateInput      = document.getElementById('rate');
+const timerDisplay   = document.getElementById('timerDisplay');
+const timerCountdown = document.getElementById('timerCountdown');
+const prevChapBtn    = document.getElementById('prevChap');
+const nextChapBtn    = document.getElementById('nextChap');
+const btnCompact     = document.getElementById('btnCompact');
+const btnFull        = document.getElementById('btnFull');
+const uploadGhBtn    = document.getElementById('uploadGhBtn');
+
+// ============================================================
+//  DATABASE (IndexedDB)
+// ============================================================
+const dbReq = indexedDB.open("ProReaderDB", 3);
+dbReq.onupgradeneeded = e => {
+    const d = e.target.result;
+    if (!d.objectStoreNames.contains("books")) d.createObjectStore("books", { keyPath: "name" });
+};
+dbReq.onsuccess = e => { db = e.target.result; refreshLib(); loadGhConfig(); };
+
+// ============================================================
+//  GITHUB CONFIG
+// ============================================================
+function saveGhConfig() {
+    const cfg = {
+        token:  document.getElementById('ghToken').value.trim(),
+        repo:   document.getElementById('ghRepo').value.trim(),
+        branch: document.getElementById('ghBranch').value.trim() || 'main',
+        folder: document.getElementById('ghFolder').value.trim() || 'books'
+    };
+    localStorage.setItem('ghConfig', JSON.stringify(cfg));
+    setGhStatus(cfg.token && cfg.repo ? '✅ Đã lưu — sẵn sàng upload' : '⚠️ Cần điền Token và Repo', cfg.token && cfg.repo ? 'ok' : 'err');
+    uploadGhBtn.disabled = !(cfg.token && cfg.repo);
+    document.getElementById('ghDetails').open = false;
+}
+
+function loadGhConfig() {
+    const cfg = getGhConfig();
+    if (!cfg) return;
+    document.getElementById('ghToken').value  = cfg.token  || '';
+    document.getElementById('ghRepo').value   = cfg.repo   || '';
+    document.getElementById('ghBranch').value = cfg.branch || 'main';
+    document.getElementById('ghFolder').value = cfg.folder || 'books';
+    if (cfg.token && cfg.repo) {
+        uploadGhBtn.disabled = false;
+        setGhStatus('✅ Đã cài đặt GitHub', 'ok');
+    }
+}
+
+function getGhConfig() {
+    try { return JSON.parse(localStorage.getItem('ghConfig')) || null; } catch { return null; }
+}
+
+function setGhStatus(msg, type = '') {
+    const el = document.getElementById('ghStatus');
+    el.textContent = msg; el.className = 'gh-status ' + type;
+}
+
+// ============================================================
+//  UPLOAD LÊN GITHUB
+// ============================================================
+async function uploadToGithub() {
+    const cfg = getGhConfig();
+    if (!cfg || !cfg.token || !cfg.repo) {
+        document.getElementById('ghDetails').open = true;
+        return setGhStatus('⚠️ Chưa cài đặt GitHub Token và Repo', 'err');
+    }
+    if (!lastLoadedFile) return setGhStatus('⚠️ Chưa chọn file', 'err');
+
+    document.getElementById('ghDetails').open = true;
+    setGhStatus('⏳ Đang upload...', '');
+    uploadGhBtn.disabled = true;
+
+    try {
+        const arrayBuf = await lastLoadedFile.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuf)));
+        const path = `${cfg.folder}/${lastLoadedFile.name}`;
+        const url  = `https://api.github.com/repos/${cfg.repo}/contents/${path}`;
+
+        // Kiểm tra file đã tồn tại chưa (để lấy sha)
+        let sha = '';
+        try {
+            const check = await fetch(url, { headers: { Authorization: `token ${cfg.token}`, Accept: 'application/vnd.github.v3+json' } });
+            if (check.ok) { const j = await check.json(); sha = j.sha; }
+        } catch {}
+
+        const body = { message: `Upload ${lastLoadedFile.name}`, content: b64, branch: cfg.branch };
+        if (sha) body.sha = sha;
+
+        const res = await fetch(url, {
+            method: 'PUT',
+            headers: { Authorization: `token ${cfg.token}`, Accept: 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+
+        if (res.ok) {
+            const j = await res.json();
+            // Lưu URL raw vào metadata sách
+            await saveBookMeta(lastLoadedFile.name, j.content.download_url);
+            setGhStatus(`✅ Upload thành công! Đã lưu trên GitHub.`, 'ok');
+            refreshLib();
+        } else {
+            const err = await res.json();
+            setGhStatus(`❌ Lỗi: ${err.message}`, 'err');
+        }
+    } catch (e) {
+        setGhStatus(`❌ ${e.message}`, 'err');
+    }
+    uploadGhBtn.disabled = false;
+}
+
+async function saveBookMeta(name, ghUrl) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(["books"], "readwrite");
+        tx.objectStore("books").get(name).onsuccess = e => {
+            const book = e.target.result || { name };
+            book.ghUrl = ghUrl;
+            tx.objectStore("books").put(book).onsuccess = resolve;
+        };
+        tx.onerror = reject;
+    });
+}
+
+// ============================================================
+//  FILE INPUT — TXT & EPUB
+// ============================================================
+document.getElementById('fileInput').onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    lastLoadedFile = file;
+    uploadGhBtn.disabled = !getGhConfig()?.token;
+
+    if (file.name.toLowerCase().endsWith('.epub')) {
+        await loadEpubFile(file);
+    } else {
+        loadTxtFile(file);
+    }
+};
+
+function loadTxtFile(file) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+        const tx = db.transaction(["books"], "readwrite");
+        tx.objectStore("books").put({ name: file.name, data: ev.target.result, type: 'txt' });
+        tx.oncomplete = () => { loadBook(file.name); refreshLib(); };
+    };
+    reader.readAsText(file);
+}
+
+async function loadEpubFile(file) {
+    displayBox.innerHTML = '<div class="loading">⏳ Đang đọc EPUB...</div>';
+    try {
+        const zip = await JSZip.loadAsync(file);
+
+        // 1. Đọc container.xml → tìm OPF path
+        const containerXml = await zip.file('META-INF/container.xml').async('string');
+        const parser = new DOMParser();
+        const containerDoc = parser.parseFromString(containerXml, 'application/xml');
+        const opfPath = containerDoc.querySelector('rootfile').getAttribute('full-path');
+        const opfDir  = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+
+        // 2. Đọc OPF → spine + manifest
+        const opfXml = await zip.file(opfPath).async('string');
+        const opfDoc = parser.parseFromString(opfXml, 'application/xml');
+
+        const manifest = {};
+        opfDoc.querySelectorAll('manifest item').forEach(item => {
+            manifest[item.getAttribute('id')] = {
+                href: item.getAttribute('href'),
+                type: item.getAttribute('media-type')
+            };
+        });
+
+        // 3. Lấy thứ tự spine
+        const spineItems = [...opfDoc.querySelectorAll('spine itemref')].map(r => r.getAttribute('idref'));
+
+        // 4. Đọc từng chapter HTML
+        const chaptersData = [];
+        for (const id of spineItems) {
+            const item = manifest[id];
+            if (!item) continue;
+            const href = opfDir + item.href;
+            const hfile = zip.file(href) || zip.file(item.href);
+            if (!hfile) continue;
+            const html = await hfile.async('string');
+            const doc  = parser.parseFromString(html, 'text/html');
+            // Lấy tiêu đề chapter từ h1/h2/title
+            const title = doc.querySelector('h1,h2,h3')?.textContent?.trim()
+                       || doc.title?.trim()
+                       || `Phần ${chaptersData.length + 1}`;
+            // Lấy text thuần
+            const body = doc.body?.innerText || doc.body?.textContent || '';
+            if (body.trim().length > 20) chaptersData.push({ title, text: body });
+        }
+
+        if (chaptersData.length === 0) throw new Error('Không đọc được nội dung EPUB');
+
+        // Ghép thành 1 chuỗi có header chương để parse giống TXT
+        const combined = chaptersData.map((c, i) => `Chương ${i + 1} ${c.title}\n${c.text}`).join('\n\n');
+
+        const tx = db.transaction(["books"], "readwrite");
+        tx.objectStore("books").put({ name: file.name, data: combined, type: 'epub' });
+        tx.oncomplete = () => { loadBook(file.name); refreshLib(); };
+
+    } catch (err) {
+        displayBox.innerHTML = `<div style="color:red;padding:10px;">❌ Lỗi đọc EPUB: ${err.message}</div>`;
+    }
+}
+
+// ============================================================
+//  THƯ VIỆN
+// ============================================================
+function refreshLib() {
+    const list = document.getElementById('bookList'); list.innerHTML = '';
+    if (!db) return;
+    db.transaction(["books"], "readonly").objectStore("books").getAll().onsuccess = e => {
+        e.target.result.forEach(book => {
+            const isActive = book.name === curBookName;
+            const typeLabel = book.type === 'epub' ? 'EPUB' : 'TXT';
+            const typeCls   = book.type === 'epub' ? 'badge-epub' : 'badge-txt';
+            const ghBadge   = book.ghUrl ? `<span class="book-badge badge-gh">☁</span>` : '';
+            const item = document.createElement('div');
+            item.className = `book-item ${isActive ? 'active' : ''}`;
+            item.innerHTML = `
+                <span onclick="loadBook('${book.name}')" style="flex:1; cursor:pointer;">
+                    ${book.name}
+                    <span class="book-badge ${typeCls}">${typeLabel}</span>${ghBadge}
+                </span>
+                <span class="delete-btn" onclick="deleteBook('${book.name}')">Xóa</span>`;
+            list.appendChild(item);
+        });
+    };
+}
+
+function deleteBook(name) {
+    if (confirm('Xóa truyện này khỏi thư viện?')) {
+        db.transaction(['books'], 'readwrite').objectStore('books').delete(name).onsuccess = () => {
+            if (curBookName === name) { curBookName = ''; displayBox.innerText = 'Đã xóa.'; }
+            refreshLib();
+        };
+    }
+}
+
+// ============================================================
+//  TẢI SÁCH & CHƯƠNG
+// ============================================================
+function loadBook(name) {
+    curBookName = name;
+    db.transaction(['books'], 'readonly').objectStore('books').get(name).onsuccess = e => {
+        const book = e.target.result;
+        curBookType = book.type || 'txt';
+        const text = book.data;
+
+        const chapterRegex = /(^\s*(?:Chương|Quyển|Mục|Phần)\s*[\dIVX\-\.]+[^\n]*|^\s*\d+\.\s+[^\n]+)/gim;
+        let match, lastIdx = 0;
+        chapters = []; chapterSelect.innerHTML = '';
+
+        while ((match = chapterRegex.exec(text)) !== null) {
+            if (match.index > 0) chapters.push(text.substring(lastIdx, match.index));
+            const opt = document.createElement('option');
+            opt.value = chapters.length;
+            opt.innerText = match[0].trim().substring(0, 45);
+            chapterSelect.appendChild(opt);
+            lastIdx = match.index;
+        }
+        chapters.push(text.substring(lastIdx));
+        if (chapters.length === 1) { chapterSelect.innerHTML = "<option value='0'>Nội dung chính</option>"; }
+
+        const saved = localStorage.getItem('pos_' + name) || '0_0';
+        curChapIdx = parseInt(saved.split('_')[0]);
+        curSentIdx = parseInt(saved.split('_')[1]);
+        chapterSelect.value = curChapIdx;
+        loadChapter(curChapIdx, true);
+        refreshLib();
+    };
+}
+
+function loadChapter(idx, useSavedSent = false) {
+    pauseReading();
+    curChapIdx = idx;
+    if (!useSavedSent) curSentIdx = 0;
+    chapterSelect.value = idx;
+    const text = chapters[idx];
+    currentSentences = text.match(/[^.!?\n]+[.!?\n]?/g) || [text];
+    currentSentences = currentSentences.map(s => s.trim()).filter(s => s.length > 0);
+    updateChapButtons();
+    renderText();
+}
+
+function updateChapButtons() {
+    prevChapBtn.disabled = curChapIdx <= 0;
+    nextChapBtn.disabled = curChapIdx >= chapters.length - 1;
+}
+
+// ============================================================
+//  RENDER & VIEW MODE
+// ============================================================
+function renderText() {
+    displayBox.innerHTML = '';
+    currentSentences.forEach((s, i) => {
+        const span = document.createElement('span');
+        span.id = `s-${i}`;
+        span.className = 'sentence' + (i === curSentIdx ? ' highlight' : '');
+        span.innerText = s + ' ';
+        span.onclick = () => { curSentIdx = i; isReading = true; speak(); };
+        displayBox.appendChild(span);
+    });
+    applyViewMode();
+    scrollToSentence();
+}
+
+function applyViewMode() {
+    if (isCompact) {
+        displayBox.classList.replace('full', 'compact') || displayBox.classList.add('compact');
+        btnCompact.classList.add('active'); btnFull.classList.remove('active');
+    } else {
+        displayBox.classList.replace('compact', 'full') || displayBox.classList.add('full');
+        btnFull.classList.add('active'); btnCompact.classList.remove('active');
+    }
+}
+
+btnCompact.onclick = () => { isCompact = true;  applyViewMode(); };
+btnFull.onclick    = () => { isCompact = false; applyViewMode(); scrollToSentence(); };
+
+// ============================================================
+//  TTS
+// ============================================================
+function speak() {
+    if (curSentIdx >= currentSentences.length) {
+        if (curChapIdx < chapters.length - 1) {
+            curChapIdx++; loadChapter(curChapIdx); isReading = true; speak();
+        }
+        return;
+    }
+    if (!isReading) return;
+
+    synth.cancel();
+    const utter = new SpeechSynthesisUtterance(currentSentences[curSentIdx]);
+    utter.lang = 'vi-VN';
+    utter.rate = parseFloat(rateInput.value);
+
+    utter.onstart = () => {
+        document.querySelectorAll('.sentence').forEach(el => el.classList.remove('highlight'));
+        document.getElementById(`s-${curSentIdx}`)?.classList.add('highlight');
+        scrollToSentence();
+        localStorage.setItem('pos_' + curBookName, `${curChapIdx}_${curSentIdx}`);
+        updateMediaSession();
+    };
+    utter.onend = () => { if (isReading && sleepEndTime >= 0) { curSentIdx++; speak(); } };
+    synth.speak(utter);
+}
+
+function scrollToSentence() {
+    if (!isCompact) document.getElementById(`s-${curSentIdx}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function updateMediaSession() {
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: curBookName, artist: `Chương ${curChapIdx + 1}`,
+            artwork: [{ src: 'https://cdn-icons-png.flaticon.com/512/3844/3844721.png', sizes: '512x512', type: 'image/png' }]
+        });
+        navigator.mediaSession.setActionHandler('play',  () => { isReading = true; speak(); });
+        navigator.mediaSession.setActionHandler('pause', pauseReading);
+    }
+}
+
+function pauseReading() { isReading = false; synth.cancel(); silentAudio.pause(); }
+function stopReading()  { pauseReading(); clearSleepTimer(); }
+
+// ============================================================
+//  SLEEP TIMER
+// ============================================================
+function startSleepTimer(minutes) {
+    clearSleepTimer(); if (minutes <= 0) return;
+    sleepEndTime = Date.now() + minutes * 60 * 1000;
+    timerDisplay.classList.add('active');
+    updateCountdownDisplay();
+    sleepTimerInterval = setInterval(() => {
+        const remaining = sleepEndTime - Date.now();
+        if (remaining <= 0) {
+            clearInterval(sleepTimerInterval); sleepTimerInterval = null;
+            sleepEndTime = 0; timerDisplay.classList.remove('active'); timerCountdown.textContent = '--:--';
+            isReading = false;
+            synth.cancel(); silentAudio.pause(); silentAudio.currentTime = 0;
+            setTimeout(() => synth.cancel(), 100);
+            setTimeout(() => { synth.cancel(); silentAudio.pause(); }, 300);
+            showTimerEndNotice();
+        } else { updateCountdownDisplay(); }
+    }, 500);
+}
+
+function updateCountdownDisplay() {
+    const s = Math.ceil(Math.max(0, sleepEndTime - Date.now()) / 1000);
+    timerCountdown.textContent = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+
+function clearSleepTimer() {
+    if (sleepTimerInterval) { clearInterval(sleepTimerInterval); sleepTimerInterval = null; }
+    sleepEndTime = 0; timerDisplay.classList.remove('active'); timerCountdown.textContent = '--:--';
+}
+
+function showTimerEndNotice() {
+    timerDisplay.classList.add('active'); timerCountdown.textContent = 'Hết giờ!';
+    Object.assign(timerDisplay.style, { background:'#f8d7da', borderColor:'#f5c2c7', color:'#842029' });
+    setTimeout(() => {
+        timerDisplay.classList.remove('active');
+        Object.assign(timerDisplay.style, { background:'', borderColor:'', color:'' });
+    }, 4000);
+}
+
+// ============================================================
+//  EVENT LISTENERS
+// ============================================================
+document.getElementById('playBtn').onclick = () => {
+    if (!curBookName) return alert('Chọn truyện!');
+    isReading = true; silentAudio.play();
+    startSleepTimer(parseInt(document.getElementById('timer').value));
+    speak();
+};
+document.getElementById('stopBtn').onclick  = stopReading;
+document.getElementById('cancelTimer').onclick = () => { clearSleepTimer(); document.getElementById('timer').value = '0'; };
+prevChapBtn.onclick    = () => { if (curChapIdx > 0) loadChapter(curChapIdx - 1); };
+nextChapBtn.onclick    = () => { if (curChapIdx < chapters.length - 1) loadChapter(curChapIdx + 1); };
+chapterSelect.onchange = e => loadChapter(parseInt(e.target.value));
+rateInput.oninput      = e => document.getElementById('rateVal').innerText = e.target.value;
+</script>
+
+</body>
+</html>
