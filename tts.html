@@ -292,19 +292,17 @@
       let selectedVoice = null;
       let utterance = null;
       let isPaused = false;
-      let currentText = '';
       let mediaRecorder = null;
       let audioChunks = [];
       let recordingStream = null;
       let isRecording = false;
 
-      // ---------- Helper: set status ----------
       function setStatus(msg, isGood = true) {
         statusDiv.textContent = msg;
         statusDiv.style.color = isGood ? '#8e8e93' : '#ff375f';
       }
 
-      // ---------- Load voices & ưu tiên Siri tiếng Việt ----------
+      // ---------- Chọn giọng: ưu tiên tiếng Việt ----------
       function loadVoices() {
         const voices = speechSynthesis.getVoices();
         if (!voices || voices.length === 0) {
@@ -312,35 +310,36 @@
           return;
         }
 
-        // Ưu tiên 1: Siri tiếng Việt (thường là "Siri" với lang "vi-VN")
+        // 1. Tìm Siri tiếng Việt (tên chứa "siri", lang bắt đầu "vi")
         let siriVi = voices.find(v => 
           v.name.toLowerCase().includes('siri') && v.lang.startsWith('vi')
         );
-        // Ưu tiên 2: Siri tiếng Anh (dự phòng)
+
+        // 2. Nếu không có, tìm bất kỳ giọng tiếng Việt nào
+        let anyVi = voices.find(v => v.lang.startsWith('vi'));
+
+        // 3. Nếu không có tiếng Việt, dùng Siri tiếng Anh
         let siriEn = voices.find(v => 
           v.name.toLowerCase().includes('siri') && v.lang.startsWith('en')
         );
-        // Ưu tiên 3: Bất kỳ giọng Siri nào
-        let siriAny = voices.find(v => v.name.toLowerCase().includes('siri'));
 
         if (siriVi) {
           selectedVoice = siriVi;
           voiceNameSpan.textContent = `Siri (Tiếng Việt) - ${siriVi.name}`;
+          setStatus('Đã chọn giọng Siri tiếng Việt', true);
+        } else if (anyVi) {
+          selectedVoice = anyVi;
+          voiceNameSpan.textContent = `Tiếng Việt - ${anyVi.name}`;
+          setStatus('Không có Siri tiếng Việt, dùng giọng tiếng Việt khác', true);
         } else if (siriEn) {
           selectedVoice = siriEn;
           voiceNameSpan.textContent = `Siri (Tiếng Anh) - ${siriEn.name}`;
-        } else if (siriAny) {
-          selectedVoice = siriAny;
-          voiceNameSpan.textContent = `Siri - ${siriAny.name}`;
+          setStatus('Không có giọng tiếng Việt, dùng Siri tiếng Anh', false);
         } else {
-          // Fallback: giọng đầu tiên có sẵn
+          // Fallback: giọng đầu tiên
           selectedVoice = voices[0];
-          voiceNameSpan.textContent = `Mặc định - ${selectedVoice.name}`;
-        }
-
-        // Nếu không tìm thấy Siri tiếng Việt, thông báo nhẹ
-        if (!siriVi) {
-          setStatus('Không tìm thấy giọng Siri tiếng Việt, dùng giọng thay thế', false);
+          voiceNameSpan.textContent = `Mặc định - ${selectedVoice.name} (${selectedVoice.lang})`;
+          setStatus('Thiếu giọng tiếng Việt. Vào Cài đặt > Trợ năng > Đọc nội dung > Giọng nói để tải.', false);
         }
       }
 
@@ -349,16 +348,13 @@
       };
       loadVoices();
 
-      // ---------- Update speed display ----------
+      // ---------- Speed control ----------
       speedRange.addEventListener('input', () => {
-        const val = parseFloat(speedRange.value).toFixed(2);
-        speedValue.textContent = val + 'x';
+        speedValue.textContent = parseFloat(speedRange.value).toFixed(2) + 'x';
       });
 
       // ---------- File handling ----------
-      fileButton.addEventListener('click', () => {
-        fileInput.click();
-      });
+      fileButton.addEventListener('click', () => fileInput.click());
 
       fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -378,7 +374,7 @@
         reader.readAsText(file, 'UTF-8');
       });
 
-      // ---------- Text to speech core ----------
+      // ---------- Speech synthesis ----------
       function stopSpeaking() {
         speechSynthesis.cancel();
         utterance = null;
@@ -407,7 +403,6 @@
           return;
         }
         stopSpeaking();
-        currentText = text;
         utterance = createUtterance(text);
         
         utterance.onstart = () => {
@@ -415,9 +410,7 @@
           setStatus('Đang đọc...');
         };
         utterance.onend = () => {
-          if (isRecording) {
-            stopRecordingAndDownload();
-          }
+          if (isRecording) stopRecordingAndDownload();
           updateButtons(false, false);
           setStatus('Đã đọc xong');
           utterance = null;
@@ -426,9 +419,7 @@
           if (e.error !== 'canceled' && e.error !== 'interrupted') {
             setStatus('Lỗi phát: ' + e.error, false);
           }
-          if (isRecording) {
-            stopRecordingAndDownload();
-          }
+          if (isRecording) stopRecordingAndDownload();
           updateButtons(false, false);
           utterance = null;
         };
@@ -444,27 +435,12 @@
         speechSynthesis.speak(utterance);
       }
 
-      function pauseSpeaking() {
-        if (speechSynthesis.speaking && !speechSynthesis.paused) {
-          speechSynthesis.pause();
-          isPaused = true;
-          updateButtons(true, true);
-          setStatus('Đã tạm dừng');
-        }
-      }
-
-      function resumeSpeaking() {
+      playBtn.addEventListener('click', () => {
         if (speechSynthesis.paused) {
           speechSynthesis.resume();
           isPaused = false;
           updateButtons(true, false);
           setStatus('Đang đọc...');
-        }
-      }
-
-      playBtn.addEventListener('click', () => {
-        if (speechSynthesis.paused) {
-          resumeSpeaking();
         } else if (!speechSynthesis.speaking) {
           startSpeaking();
         }
@@ -472,9 +448,15 @@
 
       pauseBtn.addEventListener('click', () => {
         if (speechSynthesis.speaking && !speechSynthesis.paused) {
-          pauseSpeaking();
+          speechSynthesis.pause();
+          isPaused = true;
+          updateButtons(true, true);
+          setStatus('Đã tạm dừng');
         } else if (speechSynthesis.paused) {
-          resumeSpeaking();
+          speechSynthesis.resume();
+          isPaused = false;
+          updateButtons(true, false);
+          setStatus('Đang đọc...');
         }
       });
 
@@ -483,43 +465,29 @@
         setStatus('Đã dừng');
       });
 
-      // ---------- Recording & MP3 export ----------
+      // ---------- Ghi âm & xuất MP3 ----------
       async function startRecording() {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false 
-            } 
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
           });
           recordingStream = stream;
           audioChunks = [];
           
           let mimeType = 'audio/webm';
-          if (MediaRecorder.isTypeSupported('audio/mp4')) {
-            mimeType = 'audio/mp4';
-          } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-            mimeType = 'audio/webm;codecs=opus';
-          }
+          if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+          else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
           
-          mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
-          
-          mediaRecorder.ondataavailable = (event) => {
-            if (event.data && event.data.size > 0) {
-              audioChunks.push(event.data);
-            }
+          mediaRecorder = new MediaRecorder(stream, { mimeType });
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
           };
-          
-          mediaRecorder.onstop = () => {
-            processRecording();
-          };
-          
+          mediaRecorder.onstop = () => processRecording();
           mediaRecorder.start();
           isRecording = true;
           recordBtn.textContent = '🔴 Đang ghi... (bấm để dừng)';
           recordBtn.style.background = '#ff375f';
-          setStatus('🔴 Đang ghi âm - hãy bật loa ngoài và âm lượng lớn');
+          setStatus('🔴 Đang ghi âm - bật loa ngoài với âm lượng lớn');
         } catch (err) {
           setStatus('Không thể truy cập microphone: ' + err.message, false);
         }
@@ -529,7 +497,7 @@
         if (mediaRecorder && mediaRecorder.state === 'recording') {
           mediaRecorder.stop();
           if (recordingStream) {
-            recordingStream.getTracks().forEach(track => track.stop());
+            recordingStream.getTracks().forEach(t => t.stop());
             recordingStream = null;
           }
           isRecording = false;
@@ -543,23 +511,18 @@
           setStatus('Không có dữ liệu ghi âm', false);
           return;
         }
-        
         setStatus('Đang xử lý audio...');
         const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
-        
         try {
           const arrayBuffer = await blob.arrayBuffer();
           const audioContext = new (window.AudioContext || window.webkitAudioContext)();
           let audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-          
           if (audioBuffer.duration < 0.5) {
-            setStatus('Bản ghi quá ngắn, hãy thử lại', false);
+            setStatus('Bản ghi quá ngắn', false);
             return;
           }
-          
-          const wavBuffer = audioBufferToWav(audioBuffer);
-          const mp3Blob = encodeWavToMp3(wavBuffer, audioBuffer.sampleRate);
-          
+          const wav = audioBufferToWav(audioBuffer);
+          const mp3Blob = encodeWavToMp3(wav, audioBuffer.sampleRate);
           const url = URL.createObjectURL(mp3Blob);
           const a = document.createElement('a');
           a.href = url;
@@ -568,26 +531,22 @@
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-          
           setStatus('✅ Đã tải file MP3 thành công!');
         } catch (err) {
-          setStatus('Lỗi xử lý âm thanh: ' + err.message, false);
+          setStatus('Lỗi xử lý: ' + err.message, false);
         }
       }
 
-      function audioBufferToWav(audioBuffer) {
-        const numChannels = audioBuffer.numberOfChannels;
-        const sampleRate = audioBuffer.sampleRate;
-        const length = audioBuffer.getChannelData(0).length;
-        const buffer = new ArrayBuffer(44 + length * 2);
-        const view = new DataView(buffer);
-        
-        function writeString(offset, string) {
-          for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-          }
+      function audioBufferToWav(buffer) {
+        const numChannels = buffer.numberOfChannels;
+        const sampleRate = buffer.sampleRate;
+        const samples = buffer.getChannelData(0);
+        const length = samples.length;
+        const wav = new ArrayBuffer(44 + length * 2);
+        const view = new DataView(wav);
+        function writeString(off, str) {
+          for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i));
         }
-        
         writeString(0, 'RIFF');
         view.setUint32(4, 36 + length * 2, true);
         writeString(8, 'WAVE');
@@ -601,36 +560,33 @@
         view.setUint16(34, 16, true);
         writeString(36, 'data');
         view.setUint32(40, length * 2, true);
-        
         let offset = 44;
-        const samples = audioBuffer.getChannelData(0);
         for (let i = 0; i < length; i++) {
           let s = Math.max(-1, Math.min(1, samples[i]));
           s = s < 0 ? s * 0x8000 : s * 0x7FFF;
           view.setInt16(offset, s, true);
           offset += 2;
         }
-        return new Uint8Array(buffer);
+        return new Uint8Array(wav);
       }
 
       function encodeWavToMp3(wavBytes, sampleRate) {
-        const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
+        const encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
         const samples = new Int16Array(wavBytes.buffer, 44, (wavBytes.length - 44) / 2);
         const mp3Data = [];
         const blockSize = 1152;
         for (let i = 0; i < samples.length; i += blockSize) {
           const chunk = samples.subarray(i, i + blockSize);
-          const mp3buf = mp3encoder.encodeBuffer(chunk);
+          const mp3buf = encoder.encodeBuffer(chunk);
           if (mp3buf.length > 0) mp3Data.push(new Int8Array(mp3buf));
         }
-        const endBuf = mp3encoder.flush();
-        if (endBuf.length > 0) mp3Data.push(new Int8Array(endBuf));
+        const end = encoder.flush();
+        if (end.length > 0) mp3Data.push(new Int8Array(end));
         return new Blob(mp3Data, { type: 'audio/mp3' });
       }
 
       recordBtn.addEventListener('click', async () => {
-        const text = textInput.value.trim();
-        if (!text) {
+        if (!textInput.value.trim()) {
           setStatus('Vui lòng nhập văn bản trước khi ghi âm', false);
           return;
         }
@@ -639,16 +595,12 @@
           return;
         }
         await startRecording();
-        if (isRecording) {
-          setTimeout(() => startSpeaking(), 200);
-        }
+        if (isRecording) setTimeout(() => startSpeaking(), 200);
       });
 
       window.addEventListener('beforeunload', () => {
         stopSpeaking();
-        if (recordingStream) {
-          recordingStream.getTracks().forEach(t => t.stop());
-        }
+        if (recordingStream) recordingStream.getTracks().forEach(t => t.stop());
       });
 
       updateButtons(false, false);
