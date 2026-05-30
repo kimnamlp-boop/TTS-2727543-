@@ -110,6 +110,39 @@
     textarea:focus {
       border-color: #0a84ff;
     }
+    .voice-selector {
+      background: #2c2c2e;
+      border-radius: 20px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .voice-selector label {
+      font-weight: 500;
+      font-size: 15px;
+      color: #d1d1d6;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    select {
+      flex: 1;
+      background: #3a3a3c;
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 15px;
+      -webkit-appearance: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+      outline: none;
+    }
     .speed-control {
       background: #2c2c2e;
       border-radius: 20px;
@@ -197,32 +230,16 @@
       text-align: center;
       min-height: 20px;
     }
-    .voice-info {
-      font-size: 13px;
-      color: #8e8e93;
-      background: #2c2c2e;
-      border-radius: 14px;
-      padding: 10px 14px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #30d158;
-      display: inline-block;
-    }
     @media (prefers-color-scheme: light) {
       body { background: #f2f2f7; }
       .container { background: #ffffff; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
-      textarea, .file-area, .speed-control, .voice-info { background: #f2f2f7; border-color: #e5e5ea; }
+      textarea, .file-area, .speed-control, .voice-selector { background: #f2f2f7; border-color: #e5e5ea; }
       .file-btn, .btn { background: #e5e5ea; color: #000; }
       .btn.primary { background: #007aff; color: #fff; }
       .btn.record { background: #ff3b30; color: #fff; }
-      .voice-info, .status, .file-label { color: #3a3a3c; }
+      .voice-selector label, .status, .file-label { color: #3a3a3c; }
       h1 { -webkit-text-fill-color: #1c1c1e; background: none; }
+      select { background-color: #e5e5ea; color: #000; }
     }
   </style>
 </head>
@@ -243,6 +260,12 @@
     </div>
 
     <textarea id="textInput" placeholder="Nhập hoặc dán văn bản vào đây..."></textarea>
+
+    <!-- Dropdown chọn giọng đọc -->
+    <div class="voice-selector">
+      <label for="voiceSelect">🗣️ Giọng đọc:</label>
+      <select id="voiceSelect"></select>
+    </div>
 
     <div class="speed-control">
       <label>⚡ Tốc độ</label>
@@ -266,9 +289,6 @@
       <span>🔴</span> Ghi âm & Tải MP3
     </button>
 
-    <div class="voice-info" id="voiceInfo">
-      <span class="dot"></span> Giọng đọc: <span id="voiceName">Đang tải...</span>
-    </div>
     <div class="status" id="statusMessage">Sẵn sàng</div>
   </div>
 
@@ -279,13 +299,13 @@
       const fileButton = document.getElementById('fileButton');
       const fileArea = document.getElementById('fileArea');
       const textInput = document.getElementById('textInput');
+      const voiceSelect = document.getElementById('voiceSelect');
       const speedRange = document.getElementById('speedRange');
       const speedValue = document.getElementById('speedValue');
       const playBtn = document.getElementById('playBtn');
       const pauseBtn = document.getElementById('pauseBtn');
       const stopBtn = document.getElementById('stopBtn');
       const recordBtn = document.getElementById('recordBtn');
-      const voiceNameSpan = document.getElementById('voiceName');
       const statusDiv = document.getElementById('statusMessage');
 
       // ---------- State ----------
@@ -302,51 +322,83 @@
         statusDiv.style.color = isGood ? '#8e8e93' : '#ff375f';
       }
 
-      // ---------- Chọn giọng: ưu tiên tiếng Việt ----------
-      function loadVoices() {
+      // ---------- Xây dựng danh sách giọng & tự động chọn Siri tiếng Việt ----------
+      function populateVoiceList() {
         const voices = speechSynthesis.getVoices();
         if (!voices || voices.length === 0) {
-          voiceNameSpan.textContent = 'Không có giọng';
+          voiceSelect.innerHTML = '<option value="">Không có giọng</option>';
           return;
         }
 
-        // 1. Tìm Siri tiếng Việt (tên chứa "siri", lang bắt đầu "vi")
-        let siriVi = voices.find(v => 
-          v.name.toLowerCase().includes('siri') && v.lang.startsWith('vi')
-        );
+        // Sắp xếp: giọng tiếng Việt lên đầu, sau đó Siri các ngôn ngữ, còn lại theo thứ tự gốc
+        const viVoices = voices.filter(v => v.lang.startsWith('vi'));
+        const siriVoices = voices.filter(v => v.name.toLowerCase().includes('siri') && !v.lang.startsWith('vi'));
+        const otherVoices = voices.filter(v => !v.lang.startsWith('vi') && !v.name.toLowerCase().includes('siri'));
 
-        // 2. Nếu không có, tìm bất kỳ giọng tiếng Việt nào
-        let anyVi = voices.find(v => v.lang.startsWith('vi'));
+        const sorted = [...viVoices, ...siriVoices, ...otherVoices];
 
-        // 3. Nếu không có tiếng Việt, dùng Siri tiếng Anh
-        let siriEn = voices.find(v => 
-          v.name.toLowerCase().includes('siri') && v.lang.startsWith('en')
-        );
+        // Lưu lại giá trị đang chọn (nếu có) để khôi phục
+        const currentValue = voiceSelect.value;
 
+        voiceSelect.innerHTML = '';
+        sorted.forEach(voice => {
+          const option = document.createElement('option');
+          option.value = voice.voiceURI; // voiceURI là duy nhất
+          option.textContent = `${voice.name} (${voice.lang})`;
+          voiceSelect.appendChild(option);
+        });
+
+        // Tự động chọn giọng ưu tiên: Siri tiếng Việt, nếu không thì giọng Việt đầu tiên, Siri tiếng Anh, giọng đầu tiên
+        let defaultVoice = null;
+        const siriVi = viVoices.find(v => v.name.toLowerCase().includes('siri'));
         if (siriVi) {
-          selectedVoice = siriVi;
-          voiceNameSpan.textContent = `Siri (Tiếng Việt) - ${siriVi.name}`;
-          setStatus('Đã chọn giọng Siri tiếng Việt', true);
-        } else if (anyVi) {
-          selectedVoice = anyVi;
-          voiceNameSpan.textContent = `Tiếng Việt - ${anyVi.name}`;
-          setStatus('Không có Siri tiếng Việt, dùng giọng tiếng Việt khác', true);
-        } else if (siriEn) {
-          selectedVoice = siriEn;
-          voiceNameSpan.textContent = `Siri (Tiếng Anh) - ${siriEn.name}`;
-          setStatus('Không có giọng tiếng Việt, dùng Siri tiếng Anh', false);
+          defaultVoice = siriVi;
+        } else if (viVoices.length > 0) {
+          defaultVoice = viVoices[0];
         } else {
-          // Fallback: giọng đầu tiên
-          selectedVoice = voices[0];
-          voiceNameSpan.textContent = `Mặc định - ${selectedVoice.name} (${selectedVoice.lang})`;
-          setStatus('Thiếu giọng tiếng Việt. Vào Cài đặt > Trợ năng > Đọc nội dung > Giọng nói để tải.', false);
+          const siriEn = siriVoices.find(v => v.lang.startsWith('en'));
+          if (siriEn) defaultVoice = siriEn;
+          else if (sorted.length > 0) defaultVoice = sorted[0];
+        }
+
+        if (defaultVoice) {
+          voiceSelect.value = defaultVoice.voiceURI;
+          selectedVoice = defaultVoice;
+        } else if (sorted.length > 0) {
+          voiceSelect.value = sorted[0].voiceURI;
+          selectedVoice = sorted[0];
+        }
+
+        // Nếu trước đó đã chọn một giọng hợp lệ, giữ lại lựa chọn đó
+        if (currentValue && [...voiceSelect.options].some(opt => opt.value === currentValue)) {
+          voiceSelect.value = currentValue;
+          selectedVoice = voices.find(v => v.voiceURI === currentValue) || selectedVoice;
+        }
+
+        // Thông báo nếu thiếu giọng tiếng Việt
+        if (viVoices.length === 0) {
+          setStatus('Không có giọng tiếng Việt. Vào Cài đặt > Trợ năng > Đọc nội dung > Giọng nói để tải.', false);
+        } else {
+          setStatus('Sẵn sàng');
         }
       }
 
+      // Khi người dùng thay đổi select
+      voiceSelect.addEventListener('change', () => {
+        const voices = speechSynthesis.getVoices();
+        const selectedURI = voiceSelect.value;
+        const voice = voices.find(v => v.voiceURI === selectedURI);
+        if (voice) {
+          selectedVoice = voice;
+          setStatus(`Đã chọn giọng: ${voice.name}`);
+        }
+      });
+
+      // Cập nhật danh sách khi có sự thay đổi (quan trọng với Safari)
       speechSynthesis.onvoiceschanged = () => {
-        loadVoices();
+        populateVoiceList();
       };
-      loadVoices();
+      populateVoiceList();
 
       // ---------- Speed control ----------
       speedRange.addEventListener('input', () => {
