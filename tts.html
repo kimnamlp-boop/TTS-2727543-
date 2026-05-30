@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Siri TTS - Chuyển văn bản thành MP3</title>
-  <!-- Lamejs để mã hóa WAV sang MP3 -->
   <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.0/lame.min.js"></script>
   <style>
     * {
@@ -298,7 +297,6 @@
       let audioChunks = [];
       let recordingStream = null;
       let isRecording = false;
-      let recordStartTime = 0;
 
       // ---------- Helper: set status ----------
       function setStatus(msg, isGood = true) {
@@ -306,32 +304,46 @@
         statusDiv.style.color = isGood ? '#8e8e93' : '#ff375f';
       }
 
-      // ---------- Load voices & find Siri ----------
+      // ---------- Load voices & ưu tiên Siri tiếng Việt ----------
       function loadVoices() {
         const voices = speechSynthesis.getVoices();
         if (!voices || voices.length === 0) {
           voiceNameSpan.textContent = 'Không có giọng';
           return;
         }
-        // Tìm giọng Siri (ưu tiên tiếng Việt, sau đó tiếng Anh, rồi bất kỳ Siri)
-        const siriVi = voices.find(v => v.name.toLowerCase().includes('siri') && v.lang.startsWith('vi'));
-        const siriEn = voices.find(v => v.name.toLowerCase().includes('siri') && v.lang.startsWith('en'));
-        const siriAny = voices.find(v => v.name.toLowerCase().includes('siri'));
+
+        // Ưu tiên 1: Siri tiếng Việt (thường là "Siri" với lang "vi-VN")
+        let siriVi = voices.find(v => 
+          v.name.toLowerCase().includes('siri') && v.lang.startsWith('vi')
+        );
+        // Ưu tiên 2: Siri tiếng Anh (dự phòng)
+        let siriEn = voices.find(v => 
+          v.name.toLowerCase().includes('siri') && v.lang.startsWith('en')
+        );
+        // Ưu tiên 3: Bất kỳ giọng Siri nào
+        let siriAny = voices.find(v => v.name.toLowerCase().includes('siri'));
+
         if (siriVi) {
           selectedVoice = siriVi;
+          voiceNameSpan.textContent = `Siri (Tiếng Việt) - ${siriVi.name}`;
         } else if (siriEn) {
           selectedVoice = siriEn;
+          voiceNameSpan.textContent = `Siri (Tiếng Anh) - ${siriEn.name}`;
         } else if (siriAny) {
           selectedVoice = siriAny;
+          voiceNameSpan.textContent = `Siri - ${siriAny.name}`;
         } else {
-          // Fallback to default voice (usually first)
+          // Fallback: giọng đầu tiên có sẵn
           selectedVoice = voices[0];
+          voiceNameSpan.textContent = `Mặc định - ${selectedVoice.name}`;
         }
-        voiceNameSpan.textContent = selectedVoice ? `${selectedVoice.name} (${selectedVoice.lang})` : 'Mặc định';
-        if (!selectedVoice) selectedVoice = voices[0];
+
+        // Nếu không tìm thấy Siri tiếng Việt, thông báo nhẹ
+        if (!siriVi) {
+          setStatus('Không tìm thấy giọng Siri tiếng Việt, dùng giọng thay thế', false);
+        }
       }
 
-      // Safari sometimes loads voices asynchronously
       speechSynthesis.onvoiceschanged = () => {
         loadVoices();
       };
@@ -394,7 +406,7 @@
           setStatus('Vui lòng nhập văn bản', false);
           return;
         }
-        stopSpeaking(); // cancel any previous
+        stopSpeaking();
         currentText = text;
         utterance = createUtterance(text);
         
@@ -403,7 +415,6 @@
           setStatus('Đang đọc...');
         };
         utterance.onend = () => {
-          // If recording, stop recording after speech ends
           if (isRecording) {
             stopRecordingAndDownload();
           }
@@ -451,7 +462,6 @@
         }
       }
 
-      // Play button: start or resume
       playBtn.addEventListener('click', () => {
         if (speechSynthesis.paused) {
           resumeSpeaking();
@@ -473,7 +483,7 @@
         setStatus('Đã dừng');
       });
 
-      // ---------- Recording logic (microphone capture) ----------
+      // ---------- Recording & MP3 export ----------
       async function startRecording() {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -486,14 +496,11 @@
           recordingStream = stream;
           audioChunks = [];
           
-          // Check supported MIME types on Safari
           let mimeType = 'audio/webm';
           if (MediaRecorder.isTypeSupported('audio/mp4')) {
             mimeType = 'audio/mp4';
           } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
             mimeType = 'audio/webm;codecs=opus';
-          } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-            mimeType = 'audio/webm';
           }
           
           mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
@@ -505,26 +512,22 @@
           };
           
           mediaRecorder.onstop = () => {
-            // Process audio chunks into MP3
             processRecording();
           };
           
           mediaRecorder.start();
           isRecording = true;
-          recordStartTime = Date.now();
           recordBtn.textContent = '🔴 Đang ghi... (bấm để dừng)';
           recordBtn.style.background = '#ff375f';
           setStatus('🔴 Đang ghi âm - hãy bật loa ngoài và âm lượng lớn');
         } catch (err) {
           setStatus('Không thể truy cập microphone: ' + err.message, false);
-          console.error(err);
         }
       }
 
       function stopRecordingAndDownload() {
         if (mediaRecorder && mediaRecorder.state === 'recording') {
           mediaRecorder.stop();
-          // Stop all tracks
           if (recordingStream) {
             recordingStream.getTracks().forEach(track => track.stop());
             recordingStream = null;
@@ -542,29 +545,21 @@
         }
         
         setStatus('Đang xử lý audio...');
-        const mimeType = mediaRecorder.mimeType;
-        const blob = new Blob(audioChunks, { type: mimeType });
+        const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
         
         try {
-          // Convert blob to AudioBuffer
           const arrayBuffer = await blob.arrayBuffer();
           const audioContext = new (window.AudioContext || window.webkitAudioContext)();
           let audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
           
-          // If recording duration is very short, trim silence
-          const duration = audioBuffer.duration;
-          if (duration < 0.5) {
+          if (audioBuffer.duration < 0.5) {
             setStatus('Bản ghi quá ngắn, hãy thử lại', false);
             return;
           }
           
-          // Convert AudioBuffer to WAV
           const wavBuffer = audioBufferToWav(audioBuffer);
-          
-          // Encode WAV to MP3 using lamejs
           const mp3Blob = encodeWavToMp3(wavBuffer, audioBuffer.sampleRate);
           
-          // Trigger download
           const url = URL.createObjectURL(mp3Blob);
           const a = document.createElement('a');
           a.href = url;
@@ -576,20 +571,14 @@
           
           setStatus('✅ Đã tải file MP3 thành công!');
         } catch (err) {
-          console.error(err);
           setStatus('Lỗi xử lý âm thanh: ' + err.message, false);
         }
       }
 
-      // Convert AudioBuffer to WAV (PCM 16-bit)
       function audioBufferToWav(audioBuffer) {
         const numChannels = audioBuffer.numberOfChannels;
         const sampleRate = audioBuffer.sampleRate;
-        const format = 1; // PCM
-        const bitsPerSample = 16;
-        const samples = audioBuffer.getChannelData(0); // mono or first channel
-        const length = samples.length;
-        
+        const length = audioBuffer.getChannelData(0).length;
         const buffer = new ArrayBuffer(44 + length * 2);
         const view = new DataView(buffer);
         
@@ -604,79 +593,57 @@
         writeString(8, 'WAVE');
         writeString(12, 'fmt ');
         view.setUint32(16, 16, true);
-        view.setUint16(20, format, true);
+        view.setUint16(20, 1, true);
         view.setUint16(22, numChannels, true);
         view.setUint32(24, sampleRate, true);
-        view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
-        view.setUint16(32, numChannels * bitsPerSample / 8, true);
-        view.setUint16(34, bitsPerSample, true);
+        view.setUint32(28, sampleRate * numChannels * 2, true);
+        view.setUint16(32, numChannels * 2, true);
+        view.setUint16(34, 16, true);
         writeString(36, 'data');
         view.setUint32(40, length * 2, true);
         
         let offset = 44;
+        const samples = audioBuffer.getChannelData(0);
         for (let i = 0; i < length; i++) {
           let s = Math.max(-1, Math.min(1, samples[i]));
           s = s < 0 ? s * 0x8000 : s * 0x7FFF;
           view.setInt16(offset, s, true);
           offset += 2;
         }
-        
         return new Uint8Array(buffer);
       }
 
-      // Encode WAV PCM to MP3 using lamejs
       function encodeWavToMp3(wavBytes, sampleRate) {
-        if (typeof lamejs === 'undefined') {
-          throw new Error('Thư viện lamejs chưa được tải');
-        }
-        const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, 128); // mono, 128kbps
+        const mp3encoder = new lamejs.Mp3Encoder(1, sampleRate, 128);
         const samples = new Int16Array(wavBytes.buffer, 44, (wavBytes.length - 44) / 2);
         const mp3Data = [];
-        
         const blockSize = 1152;
         for (let i = 0; i < samples.length; i += blockSize) {
           const chunk = samples.subarray(i, i + blockSize);
           const mp3buf = mp3encoder.encodeBuffer(chunk);
-          if (mp3buf.length > 0) {
-            mp3Data.push(new Int8Array(mp3buf));
-          }
+          if (mp3buf.length > 0) mp3Data.push(new Int8Array(mp3buf));
         }
         const endBuf = mp3encoder.flush();
-        if (endBuf.length > 0) {
-          mp3Data.push(new Int8Array(endBuf));
-        }
-        
-        const blob = new Blob(mp3Data, { type: 'audio/mp3' });
-        return blob;
+        if (endBuf.length > 0) mp3Data.push(new Int8Array(endBuf));
+        return new Blob(mp3Data, { type: 'audio/mp3' });
       }
 
-      // Record button click handler
       recordBtn.addEventListener('click', async () => {
         const text = textInput.value.trim();
         if (!text) {
           setStatus('Vui lòng nhập văn bản trước khi ghi âm', false);
           return;
         }
-        
-        // If already recording, stop manually
         if (isRecording) {
-          stopSpeaking(); // stop speech and recording
+          stopSpeaking();
           return;
         }
-        
-        // Request microphone and start recording
         await startRecording();
-        
-        // Start speaking (will auto-stop recording when speech ends)
         if (isRecording) {
-          // Small delay to ensure recording is ready
-          setTimeout(() => {
-            startSpeaking();
-          }, 200);
+          setTimeout(() => startSpeaking(), 200);
         }
       });
 
-      // Cleanup on page unload
       window.addEventListener('beforeunload', () => {
         stopSpeaking();
         if (recordingStream) {
@@ -684,7 +651,6 @@
         }
       });
 
-      // Initialize button states
       updateButtons(false, false);
       setStatus('Sẵn sàng');
     })();
